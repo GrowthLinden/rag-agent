@@ -1,0 +1,28 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env    
+.python-version
+
+#docker files
+volumes/
+
+# OS files
+.DS_Store
+data/
+
+# local study / scratch
+langchain-study/
+
+# personal local files
+resume_text.txt
+agentJD岗位职责.txt
+agent面试经历链接.txt
+陈佳乐-应届本科软工-15501432808.pdf
