@@ -272,6 +272,18 @@ button {
     color: var(--text-muted);
 }
 
+.settings-header-copy {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.settings-header-copy .eyebrow {
+    justify-content: center;
+}
+
 .eyebrow,
 .auth-badge {
     display: inline-flex;
