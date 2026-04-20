@@ -1,6 +1,6 @@
 # RAG Agent
 
-本项目基于 [SuperMew](https://github.com/icey1287/SuperMew) 做二次开发，目标是提供一个对新手也比较友好的本地 RAG Agent 示例：前端可直接聊天，后端支持文档入库、混合检索、流式回答和基础账号权限。
+本项目基于 [SuperMew](https://github.com/icey1287/SuperMew) 做二次开发，目标是提供一个对新手也比较友好的本地完整 RAG Agent 项目学习示例：前端可直接聊天，后端支持文档入库、混合检索、流式回答和基础账号权限。
 
 ## 这套系统能做什么
 
@@ -9,6 +9,7 @@
 - 支持流式输出，回答会像打字一样实时显示。
 - 支持登录鉴权和简单权限控制。
 - 支持会话历史保存。
+
 
 ## RAG 核心能力
 
@@ -34,6 +35,12 @@
 - `frontend/`：前端页面
 - `docker-compose.yml`：PostgreSQL、Redis、Milvus 相关依赖
 - `.env.example`：环境变量模板
+
+## 项目说明
+
+- 基于supermew二开，与原项目不同的是页面做了整体的优化，更贴近于市面主流AI对话工具
+- 用户查询天气时可以指定查询某天的具体天气。
+- 同时可以查询具体的县级市天气，不在局限于市区天气等
 
 ## 小白启动教程
 
@@ -197,7 +204,5 @@ docker compose down
 - `POST /documents/upload`：上传文档
 - `GET /documents`：查看文档列表
 
-## 说明
+## 部分运行图片
 
-- `.env`、`volumes/`、`data/` 不建议提交到仓库。
-- 如果你要给别人部署，直接把 `.env.example` 留在仓库里即可。
