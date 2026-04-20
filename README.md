@@ -205,4 +205,12 @@ docker compose down
 - `GET /documents`：查看文档列表
 
 ## 部分运行图片
-
+- 首页
+![输入图片说明](uploads/%E9%A6%96%E9%A1%B5.png)
+- 知识库上传
+![输入图片说明](%E7%9F%A5%E8%AF%86%E5%BA%93.png)
+- 天气查询
+![输入图片说明](uploads/%E5%A4%A9%E6%B0%94.png)
+- 知识库查询检索过程
+![输入图片说明](uploads/image.png)
+![输入图片说明](uploads/%E6%A3%80%E7%B4%A2.png)
