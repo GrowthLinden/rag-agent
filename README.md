@@ -132,6 +132,9 @@ uv sync
 ```bash
 uv run uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
 ```
+```bash
+uv run python backend/app.py
+```
 
 ### 7. 打开页面
 
