@@ -15,6 +15,7 @@ from milvus_client import MilvusManager
 from milvus_writer import MilvusWriter
 from models import User
 from parent_chunk_store import ParentChunkStore
+from pdf_image_store import build_image_documents, delete_pdf_images, extract_pdf_images
 from schemas import (
     AuthResponse,
     ChatRequest,
@@ -241,6 +242,13 @@ async def upload_document(file: UploadFile = File(...), _: User = Depends(requir
         except Exception as doc_err:
             raise HTTPException(status_code=500, detail=f"文档处理失败: {doc_err}")
 
+        extracted_images = []
+        if file_lower.endswith(".pdf"):
+            try:
+                extracted_images = extract_pdf_images(str(file_path), filename)
+            except Exception:
+                extracted_images = []
+
         if not new_docs:
             raise HTTPException(status_code=500, detail="文档处理失败，未能提取内容")
 
@@ -251,13 +259,17 @@ async def upload_document(file: UploadFile = File(...), _: User = Depends(requir
 
         parent_chunk_store.upsert_documents(parent_docs)
         milvus_writer.write_documents(leaf_docs)
+        image_docs = build_image_documents(extracted_images)
+        if image_docs:
+            milvus_writer.write_documents(image_docs)
 
         return DocumentUploadResponse(
             filename=filename,
-            chunks_processed=len(leaf_docs),
+            chunks_processed=len(leaf_docs) + len(image_docs),
             message=(
                 f"成功上传并处理 {filename}，叶子分块 {len(leaf_docs)} 个，"
-                f"父级分块 {len(parent_docs)} 个（存入 PostgreSQL）"
+                f"父级分块 {len(parent_docs)} 个（存入 PostgreSQL），"
+                f"PDF 图片 {len(extracted_images)} 张，图片语义分块 {len(image_docs)} 个"
             ),
         )
     except HTTPException:
@@ -275,6 +287,7 @@ async def delete_document(filename: str, _: User = Depends(require_admin)):
         delete_expr = f'filename == "{filename}"'
         result = milvus_manager.delete(delete_expr)
         parent_chunk_store.delete_by_filename(filename)
+        delete_pdf_images(filename)
 
         return DocumentDeleteResponse(
             filename=filename,

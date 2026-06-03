@@ -218,6 +218,7 @@ createApp({
                 isUser: false,
                 isThinking: true,
                 ragTrace: null,
+                attachments: [],
                 ragSteps: []
             });
             const botMsgIdx = this.messages.length - 1;
@@ -267,6 +268,7 @@ createApp({
                                     this.messages[botMsgIdx].text += data.content;
                                 } else if (data.type === 'trace') {
                                     this.messages[botMsgIdx].ragTrace = data.rag_trace;
+                                    this.messages[botMsgIdx].attachments = this.getImagesFromTrace(data.rag_trace);
                                 } else if (data.type === 'rag_step') {
                                     if (!this.messages[botMsgIdx].ragSteps) {
                                         this.messages[botMsgIdx].ragSteps = [];
@@ -368,7 +370,8 @@ createApp({
                 this.messages = data.messages.map(msg => ({
                     text: msg.content,
                     isUser: msg.type === 'human',
-                    ragTrace: msg.rag_trace || null
+                    ragTrace: msg.rag_trace || null,
+                    attachments: this.getImagesFromTrace(msg.rag_trace)
                 }));
 
                 this.$nextTick(() => {
@@ -523,6 +526,19 @@ createApp({
                 return 'fas fa-file-excel';
             }
             return 'fas fa-file';
+        },
+
+        getImagesFromTrace(trace) {
+            if (!trace) return [];
+            const images = trace.retrieved_images || [];
+            const seen = new Set();
+            return images.filter(image => {
+                if (!image || !image.url || seen.has(image.url)) {
+                    return false;
+                }
+                seen.add(image.url);
+                return true;
+            });
         }
     },
     watch: {

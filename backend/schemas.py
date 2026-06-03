@@ -38,6 +38,11 @@ class RetrievedChunk(BaseModel):
     score: Optional[float] = None
     rrf_rank: Optional[int] = None
     rerank_score: Optional[float] = None
+    images: Optional[list[dict]] = None
+    content_kind: Optional[str] = None
+    image_url: Optional[str] = None
+    image_caption: Optional[str] = None
+    visual_description: Optional[str] = None
 
 
 class RagTrace(BaseModel):
@@ -71,6 +76,7 @@ class RagTrace(BaseModel):
     retrieved_chunks: Optional[List[RetrievedChunk]] = None
     initial_retrieved_chunks: Optional[List[RetrievedChunk]] = None
     expanded_retrieved_chunks: Optional[List[RetrievedChunk]] = None
+    retrieved_images: Optional[list[dict]] = None
 
 
 class ChatResponse(BaseModel):

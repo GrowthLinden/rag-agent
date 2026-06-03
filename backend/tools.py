@@ -237,6 +237,27 @@ def search_knowledge_base(query: str) -> str:
         source = result.get("filename", "Unknown")
         page = result.get("page_number", "N/A")
         text = result.get("text", "")
-        formatted.append(f"[{i}] {source} (Page {page}):\n{text}")
+        image_url = result.get("image_url") or ""
+        image_caption = result.get("image_caption") or ""
+        visual_description = result.get("visual_description") or ""
+        images = result.get("images") or []
+
+        extra = []
+        if image_url:
+            extra.append(f"Image URL: {image_url}")
+        if image_caption:
+            extra.append(f"Image Caption: {image_caption}")
+        if visual_description:
+            extra.append(f"Visual Description: {visual_description}")
+        for image in images:
+            extra.append(
+                "Related Image: "
+                f"{image.get('url', '')} "
+                f"caption={image.get('caption', '')} "
+                f"description={image.get('visual_description', '')}"
+            )
+
+        extra_text = "\n" + "\n".join(extra) if extra else ""
+        formatted.append(f"[{i}] {source} (Page {page}):\n{text}{extra_text}")
 
     return "Retrieved Chunks:\n" + "\n\n---\n\n".join(formatted)

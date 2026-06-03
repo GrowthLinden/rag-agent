@@ -277,6 +277,17 @@
                                         :class="msg.isUser ? 'user-card' : 'assistant-card'"
                                         v-html="msg.isUser ? escapeHtml(msg.text) : parseMarkdown(msg.text)"></div>
 
+                                    <div v-if="!msg.isUser && msg.attachments && msg.attachments.length"
+                                        class="pdf-image-strip">
+                                        <figure v-for="image in msg.attachments" :key="image.url" class="pdf-image-card">
+                                            <img :src="image.url" :alt="`${image.filename || 'PDF'} page ${Number(image.page_number || 0) + 1}`">
+                                            <figcaption>
+                                                <span>{{ image.filename }}</span>
+                                                <small>Page {{ Number(image.page_number || 0) + 1 }}</small>
+                                            </figcaption>
+                                        </figure>
+                                    </div>
+
                                     <div v-if="!msg.isUser && msg.ragTrace" class="message-meta-card">
                                         <details class="reasoning-details">
                                             <summary>查看检索过程</summary>

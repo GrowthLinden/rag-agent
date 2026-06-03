@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from rag_utils import retrieve_documents, step_back_expand, generate_hypothetical_document
 from tools import emit_rag_step
+from pdf_image_store import attach_images_to_docs, images_for_pages
 
 load_dotenv()
 
@@ -146,6 +147,7 @@ def retrieve_initial(state: RAGState) -> RAGState:
         "auto_merge_threshold": retrieve_meta.get("auto_merge_threshold"),
         "auto_merge_replaced_chunks": retrieve_meta.get("auto_merge_replaced_chunks"),
         "auto_merge_steps": retrieve_meta.get("auto_merge_steps"),
+        "retrieved_images": retrieve_meta.get("retrieved_images", []),
     }
     return {
         "query": query,
@@ -332,6 +334,8 @@ def retrieve_expanded(state: RAGState) -> RAGState:
     for idx, item in enumerate(deduped, 1):
         item["rrf_rank"] = idx
 
+    deduped = attach_images_to_docs(deduped, query=state["question"])
+    retrieved_images = images_for_pages(deduped, query=state["question"])
     context = _format_docs(deduped)
     emit_rag_step("✅", f"扩展检索完成，共 {len(deduped)} 个片段")
     rag_trace = state.get("rag_trace", {}) or {}
@@ -357,6 +361,7 @@ def retrieve_expanded(state: RAGState) -> RAGState:
         "auto_merge_threshold": auto_merge_threshold,
         "auto_merge_replaced_chunks": auto_merge_replaced_chunks,
         "auto_merge_steps": auto_merge_steps,
+        "retrieved_images": retrieved_images,
     })
     return {"docs": deduped, "context": context, "rag_trace": rag_trace}
 

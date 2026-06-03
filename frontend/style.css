@@ -875,6 +875,43 @@ textarea:focus {
     font-size: 0.86rem;
 }
 
+.pdf-image-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.pdf-image-card {
+    overflow: hidden;
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+}
+
+.pdf-image-card img {
+    width: 100%;
+    height: 170px;
+    display: block;
+    object-fit: contain;
+    background: #f8fbff;
+}
+
+.pdf-image-card figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.pdf-image-card figcaption span {
+    color: var(--text);
+    font-weight: 700;
+    word-break: break-all;
+}
+
 .composer-wrap {
     padding: 0 8px 6px;
 }
