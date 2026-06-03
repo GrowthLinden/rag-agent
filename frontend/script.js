@@ -530,7 +530,22 @@ createApp({
 
         getImagesFromTrace(trace) {
             if (!trace) return [];
-            const images = trace.retrieved_images || [];
+            const chunks = [
+                ...(trace.retrieved_chunks || []),
+                ...(trace.initial_retrieved_chunks || []),
+                ...(trace.expanded_retrieved_chunks || [])
+            ];
+            const directImages = chunks
+                .filter(chunk => chunk && chunk.image_url)
+                .map(chunk => ({
+                    filename: chunk.filename,
+                    page_number: chunk.page_number,
+                    url: chunk.image_url,
+                    caption: chunk.image_caption,
+                    visual_description: chunk.visual_description
+                }));
+            const filteredImages = trace.retrieved_images || [];
+            const images = filteredImages.length ? filteredImages : directImages;
             const seen = new Set();
             return images.filter(image => {
                 if (!image || !image.url || seen.has(image.url)) {

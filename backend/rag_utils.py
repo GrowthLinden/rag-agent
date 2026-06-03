@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from milvus_client import MilvusManager
 from embedding import EmbeddingService
 from parent_chunk_store import ParentChunkStore
-from pdf_image_store import attach_images_to_docs, images_for_pages
+from pdf_image_store import attach_images_to_docs, images_from_retrieved_docs
 from langchain.chat_models import init_chat_model
 
 load_dotenv()
@@ -265,7 +265,7 @@ def retrieve_documents(query: str, top_k: int = 5) -> Dict[str, Any]:
         rerank_meta["candidate_k"] = candidate_k
         rerank_meta["leaf_retrieve_level"] = LEAF_RETRIEVE_LEVEL
         rerank_meta.update(merge_meta)
-        rerank_meta["retrieved_images"] = images_for_pages(merged_docs, query=query)
+        rerank_meta["retrieved_images"] = images_from_retrieved_docs(merged_docs, query=query)
         return {"docs": merged_docs, "meta": rerank_meta}
     except Exception:
         try:
@@ -283,7 +283,7 @@ def retrieve_documents(query: str, top_k: int = 5) -> Dict[str, Any]:
             rerank_meta["candidate_k"] = candidate_k
             rerank_meta["leaf_retrieve_level"] = LEAF_RETRIEVE_LEVEL
             rerank_meta.update(merge_meta)
-            rerank_meta["retrieved_images"] = images_for_pages(merged_docs, query=query)
+            rerank_meta["retrieved_images"] = images_from_retrieved_docs(merged_docs, query=query)
             return {"docs": merged_docs, "meta": rerank_meta}
         except Exception:
             return {

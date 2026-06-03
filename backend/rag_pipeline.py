@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from rag_utils import retrieve_documents, step_back_expand, generate_hypothetical_document
 from tools import emit_rag_step
-from pdf_image_store import attach_images_to_docs, images_for_pages
+from pdf_image_store import attach_images_to_docs, images_from_retrieved_docs
 
 load_dotenv()
 
@@ -335,7 +335,7 @@ def retrieve_expanded(state: RAGState) -> RAGState:
         item["rrf_rank"] = idx
 
     deduped = attach_images_to_docs(deduped, query=state["question"])
-    retrieved_images = images_for_pages(deduped, query=state["question"])
+    retrieved_images = images_from_retrieved_docs(deduped, query=state["question"])
     context = _format_docs(deduped)
     emit_rag_step("✅", f"扩展检索完成，共 {len(deduped)} 个片段")
     rag_trace = state.get("rag_trace", {}) or {}

@@ -63,13 +63,12 @@ def _image_score(image: dict[str, Any], query: str) -> float:
     if not query_norm:
         return 0.0
 
-    fields = [
+    best = 0.0
+    primary_fields = [
         image.get("caption", ""),
-        image.get("filename", ""),
         " ".join(image.get("keywords", []) or []),
     ]
-    best = 0.0
-    for field in fields:
+    for field in primary_fields:
         field_norm = _normalize_text(field)
         if not field_norm:
             continue
@@ -85,6 +84,23 @@ def _image_score(image: dict[str, Any], query: str) -> float:
         query_chars = set(query_norm)
         if field_chars:
             best = max(best, len(field_chars & query_chars) / len(field_chars))
+
+    visual_fields = [
+        image.get("visual_description", ""),
+        image.get("text", ""),
+    ]
+    for field in visual_fields:
+        field_norm = _normalize_text(field)
+        if not field_norm:
+            continue
+        if query_norm in field_norm:
+            best = max(best, 0.95)
+            continue
+        common_run = _max_common_substring_len(field_norm, query_norm)
+        if common_run >= 3:
+            best = max(best, 0.85)
+        elif common_run >= 2:
+            best = max(best, 0.65)
     return best
 
 
@@ -114,6 +130,51 @@ def _filter_images_by_query(images: list[dict[str, Any]], query: str) -> list[di
     if best_score >= 0.6:
         return [image for image, score in scored if score == best_score]
     return []
+
+
+def images_from_retrieved_docs(
+    docs: list[dict[str, Any]],
+    query: str = "",
+    max_images: int = 3,
+) -> list[dict[str, Any]]:
+    """Return only images that are directly represented by relevant retrieved image docs."""
+    candidates: list[tuple[dict[str, Any], float]] = []
+    seen = set()
+    for index, doc in enumerate(docs):
+        image_url = doc.get("image_url") or ""
+        if not image_url or image_url in seen:
+            continue
+        seen.add(image_url)
+        image = {
+            "filename": doc.get("filename", ""),
+            "page_number": doc.get("page_number", 0),
+            "image_index": doc.get("chunk_idx", 0),
+            "url": image_url,
+            "caption": doc.get("image_caption", ""),
+            "visual_description": doc.get("visual_description", ""),
+            "text": doc.get("text", ""),
+        }
+        score = _image_score(image, query)
+        rank_bonus = max(0.0, 0.1 - index * 0.01)
+        candidates.append((image, score + rank_bonus))
+
+    if not candidates:
+        return []
+
+    exact = [image for image, score in candidates if score >= 100.0]
+    if exact:
+        return exact[:max_images]
+
+    best_score = max(score for _, score in candidates)
+    if best_score < 0.6:
+        return []
+
+    selected = [
+        image
+        for image, score in sorted(candidates, key=lambda item: item[1], reverse=True)
+        if score >= best_score - 0.05
+    ]
+    return selected[:max_images]
 
 
 def delete_pdf_images(filename: str) -> None:
