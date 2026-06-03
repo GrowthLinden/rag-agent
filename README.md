@@ -219,5 +219,7 @@ docker compose down
 - 天气查询
 ![输入图片说明](uploads/%E5%A4%A9%E6%B0%94.png)
 - 知识库查询检索过程
+图片检索过程
+![输入图片说明](uploads/111d0979-7a88-4898-b53e-9035c1af3a67.png)
 ![输入图片说明](uploads/image.png)
 ![输入图片说明](uploads/%E6%A3%80%E7%B4%A2.png)
