@@ -5,6 +5,8 @@ import math
 import requests
 from collections import Counter
 from dotenv import load_dotenv
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 load_dotenv()
 
@@ -17,6 +19,19 @@ class EmbeddingService:
         self.base_url = os.getenv("EMBEDDING_BASE_URL") or os.getenv("BASE_URL")
         self.embedder = os.getenv("EMBEDDER")
         self.api_key = os.getenv("EMBEDDING_API_KEY") or os.getenv("ARK_API_KEY")
+        self.timeout = float(os.getenv("EMBEDDING_TIMEOUT_SECONDS", "30"))
+        self._session = requests.Session()
+        retry = Retry(
+            total=int(os.getenv("EMBEDDING_HTTP_RETRIES", "2")),
+            connect=2,
+            read=2,
+            backoff_factor=0.6,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=frozenset(["POST"]),
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        self._session.mount("http://", adapter)
+        self._session.mount("https://", adapter)
         
         # BM25 参数
         self.k1 = 1.5  # 词频饱和参数
@@ -38,6 +53,18 @@ class EmbeddingService:
         :param batch_size: 批处理大小限制（如通义千问 DashScope 限制 10）
         :return: 向量列表
         """
+        missing = [
+            name
+            for name, value in {
+                "EMBEDDING_BASE_URL/BASE_URL": self.base_url,
+                "EMBEDDER": self.embedder,
+                "EMBEDDING_API_KEY/ARK_API_KEY": self.api_key,
+            }.items()
+            if not value
+        ]
+        if missing:
+            raise ValueError(f"缺少 Embedding 配置: {', '.join(missing)}")
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -53,7 +80,12 @@ class EmbeddingService:
             }
     
             try:
-                response = requests.post(f"{self.base_url}/embeddings", headers=headers, json=data)
+                response = self._session.post(
+                    f"{self.base_url}/embeddings",
+                    headers=headers,
+                    json=data,
+                    timeout=self.timeout,
+                )
                 response.raise_for_status()
                 result = response.json()
                 # 按照 API 返回的数据扩展结果

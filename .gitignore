@@ -17,6 +17,8 @@ volumes/
 # OS files
 .DS_Store
 data/
+.idea/
+.pytest_cache/
 
 # local study / scratch
 langchain-study/

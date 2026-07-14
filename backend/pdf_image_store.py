@@ -137,42 +137,62 @@ def images_from_retrieved_docs(
     query: str = "",
     max_images: int = 3,
 ) -> list[dict[str, Any]]:
-    """Return only images that are directly represented by relevant retrieved image docs."""
-    candidates: list[tuple[dict[str, Any], float]] = []
+    """Return relevant images from retrieved image docs and page-linked images."""
+    candidates: list[tuple[dict[str, Any], float, float]] = []
     seen = set()
-    for index, doc in enumerate(docs):
-        image_url = doc.get("image_url") or ""
+
+    def add_candidate(raw_image: dict[str, Any], doc: dict[str, Any], rank_index: int) -> None:
+        image_url = raw_image.get("url") or raw_image.get("image_url") or ""
         if not image_url or image_url in seen:
-            continue
+            return
         seen.add(image_url)
         image = {
-            "filename": doc.get("filename", ""),
-            "page_number": doc.get("page_number", 0),
-            "image_index": doc.get("chunk_idx", 0),
+            "filename": raw_image.get("filename") or doc.get("filename", ""),
+            "page_number": raw_image.get("page_number", doc.get("page_number", 0)),
+            "image_index": raw_image.get("image_index", raw_image.get("chunk_idx", doc.get("chunk_idx", 0))),
             "url": image_url,
-            "caption": doc.get("image_caption", ""),
-            "visual_description": doc.get("visual_description", ""),
-            "text": doc.get("text", ""),
+            "caption": raw_image.get("caption") or raw_image.get("image_caption") or doc.get("image_caption", ""),
+            "keywords": raw_image.get("keywords", []),
+            "visual_description": raw_image.get("visual_description") or doc.get("visual_description", ""),
+            "text": raw_image.get("text") or doc.get("text", ""),
         }
-        score = _image_score(image, query)
-        rank_bonus = max(0.0, 0.1 - index * 0.01)
-        candidates.append((image, score + rank_bonus))
+        raw_score = _image_score(image, query)
+        rank_bonus = max(0.0, 0.1 - rank_index * 0.01)
+        candidates.append((image, raw_score, rank_bonus))
+
+    for index, doc in enumerate(docs):
+        if doc.get("image_url"):
+            add_candidate(
+                {
+                    "image_url": doc.get("image_url", ""),
+                    "filename": doc.get("filename", ""),
+                    "page_number": doc.get("page_number", 0),
+                    "chunk_idx": doc.get("chunk_idx", 0),
+                    "image_caption": doc.get("image_caption", ""),
+                    "visual_description": doc.get("visual_description", ""),
+                    "text": doc.get("text", ""),
+                },
+                doc,
+                index,
+            )
+        for image in doc.get("images") or []:
+            add_candidate(image, doc, index)
 
     if not candidates:
         return []
 
-    exact = [image for image, score in candidates if score >= 100.0]
+    exact = [image for image, raw_score, _rank_bonus in candidates if raw_score >= 100.0]
     if exact:
         return exact[:max_images]
 
-    best_score = max(score for _, score in candidates)
+    best_score = max(raw_score for _, raw_score, _rank_bonus in candidates)
     if best_score < 0.6:
         return []
 
     selected = [
         image
-        for image, score in sorted(candidates, key=lambda item: item[1], reverse=True)
-        if score >= best_score - 0.05
+        for image, raw_score, rank_bonus in sorted(candidates, key=lambda item: (item[1], item[2]), reverse=True)
+        if raw_score == best_score
     ]
     return selected[:max_images]
 

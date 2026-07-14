@@ -1,17 +1,27 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 
 
 class RegisterRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=255)
+
+
+class AdminUserCreateRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=255)
     role: Optional[str] = "user"
-    admin_code: Optional[str] = None
+
+
+class AdminUserUpdateRequest(BaseModel):
+    username: Optional[str] = Field(default=None, max_length=100)
+    password: Optional[str] = Field(default=None, max_length=255)
+    role: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=255)
 
 
 class AuthResponse(BaseModel):
@@ -27,8 +37,8 @@ class CurrentUserResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
-    session_id: Optional[str] = "default_session"
+    message: str = Field(min_length=1, max_length=10000)
+    session_id: Optional[str] = Field(default="default_session", max_length=120)
 
 
 class RetrievedChunk(BaseModel):
@@ -86,6 +96,7 @@ class ChatResponse(BaseModel):
 
 class MessageInfo(BaseModel):
     type: str
+    sender_type: Optional[str] = None
     content: str
     timestamp: str
     rag_trace: Optional[RagTrace] = None
@@ -93,12 +104,15 @@ class MessageInfo(BaseModel):
 
 class SessionMessagesResponse(BaseModel):
     messages: List[MessageInfo]
+    session_status: Optional[str] = None
 
 
 class SessionInfo(BaseModel):
     session_id: str
     updated_at: str
     message_count: int
+    status: Optional[str] = None
+    last_message_preview: Optional[str] = None
 
 
 class SessionListResponse(BaseModel):
@@ -130,4 +144,31 @@ class DocumentUploadResponse(BaseModel):
 class DocumentDeleteResponse(BaseModel):
     filename: str
     chunks_deleted: int
+    message: str
+
+
+class ProductInfo(BaseModel):
+    id: int
+    name: str
+    category: str
+    price: str
+    stock: int
+    material: str
+    specifications: str
+    image_url: str
+    created_at: str
+    updated_at: str
+
+
+class ProductListResponse(BaseModel):
+    products: List[ProductInfo]
+
+
+class ProductMutationResponse(BaseModel):
+    product: ProductInfo
+    message: str
+
+
+class ProductDeleteResponse(BaseModel):
+    product_id: int
     message: str

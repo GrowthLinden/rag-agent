@@ -8,13 +8,20 @@ import redis
 class RedisCache:
     def __init__(self):
         self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        self.key_prefix = os.getenv("REDIS_KEY_PREFIX", "supermew")
+        self.key_prefix = os.getenv("REDIS_KEY_PREFIX", "superservice")
         self.default_ttl = int(os.getenv("REDIS_CACHE_TTL_SECONDS", "300"))
+        self.socket_timeout = float(os.getenv("REDIS_SOCKET_TIMEOUT_SECONDS", "2"))
         self._client = None
 
     def _get_client(self):
         if self._client is None:
-            self._client = redis.Redis.from_url(self.redis_url, decode_responses=True)
+            self._client = redis.Redis.from_url(
+                self.redis_url,
+                decode_responses=True,
+                socket_connect_timeout=self.socket_timeout,
+                socket_timeout=self.socket_timeout,
+                health_check_interval=30,
+            )
         return self._client
 
     def _key(self, key: str) -> str:
@@ -45,9 +52,15 @@ class RedisCache:
     def delete_pattern(self, pattern: str) -> None:
         try:
             full_pattern = self._key(pattern)
-            keys = self._get_client().keys(full_pattern)
-            if keys:
-                self._get_client().delete(*keys)
+            client = self._get_client()
+            batch = []
+            for key in client.scan_iter(match=full_pattern, count=500):
+                batch.append(key)
+                if len(batch) >= 500:
+                    client.delete(*batch)
+                    batch = []
+            if batch:
+                client.delete(*batch)
         except Exception:
             return
 

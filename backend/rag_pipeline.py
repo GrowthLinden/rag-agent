@@ -15,6 +15,9 @@ API_KEY = os.getenv("ARK_API_KEY")
 MODEL = os.getenv("MODEL")
 BASE_URL = os.getenv("BASE_URL")
 GRADE_MODEL = os.getenv("GRADE_MODEL", "gpt-4.1")
+RAG_FAST_MODE = os.getenv("RAG_FAST_MODE", "false").lower() == "true"
+RAG_GRADING_ENABLED = os.getenv("RAG_GRADING_ENABLED", "true").lower() != "false"
+RAG_REWRITE_ENABLED = os.getenv("RAG_REWRITE_ENABLED", "true").lower() != "false"
 
 _grader_model = None
 _router_model = None
@@ -158,6 +161,24 @@ def retrieve_initial(state: RAGState) -> RAGState:
 
 
 def grade_documents_node(state: RAGState) -> RAGState:
+    if RAG_FAST_MODE or not RAG_GRADING_ENABLED:
+        has_docs = bool(state.get("docs"))
+        route = "generate_answer" if has_docs or not RAG_REWRITE_ENABLED else "rewrite_question"
+        emit_rag_step(
+            "⚡",
+            "快速模式：跳过相关性二次评分",
+            "已有召回片段，直接组织回答" if has_docs else "未召回片段，准备重写查询",
+        )
+        grade_update = {
+            "grade_score": "skipped",
+            "grade_route": route,
+            "rewrite_needed": route == "rewrite_question",
+            "fast_mode": True,
+        }
+        rag_trace = state.get("rag_trace", {}) or {}
+        rag_trace.update(grade_update)
+        return {"route": route, "rag_trace": rag_trace}
+
     grader = _get_grader_model()
     emit_rag_step("📊", "正在评估文档相关性...")
     if not grader:

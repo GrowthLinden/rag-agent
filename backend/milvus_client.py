@@ -2,6 +2,7 @@
 import os
 from dotenv import load_dotenv
 from pymilvus import MilvusClient, DataType, AnnSearchRequest, RRFRanker
+from file_security import milvus_string_literal
 
 load_dotenv()
 
@@ -117,7 +118,7 @@ class MilvusManager:
         ids = [item for item in chunk_ids if item]
         if not ids:
             return []
-        quoted_ids = ", ".join([f'"{item}"' for item in ids])
+        quoted_ids = ", ".join(milvus_string_literal(item) for item in ids)
         filter_expr = f"chunk_id in [{quoted_ids}]"
         return self.query(
             filter_expr=filter_expr,

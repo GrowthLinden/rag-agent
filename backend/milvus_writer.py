@@ -29,8 +29,7 @@ class MilvusWriter:
             dense_dim = len(sample_dense[0])
             self.milvus_manager.init_collection(dense_dim=dense_dim)
         except Exception as e:
-            # 捕获可能的初始化问题
-            pass
+            raise RuntimeError(f"初始化向量写入失败: {e}") from e
 
         total = len(documents)
         for i in range(0, total, batch_size):

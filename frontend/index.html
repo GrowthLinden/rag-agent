@@ -4,179 +4,446 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperMew</title>
+    <title>SuperService AI 客服</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+    <style>[v-cloak]{display:none!important}</style>
 </head>
 
 <body>
-    <div id="app" class="app-shell">
+    <div id="app" class="app-shell" v-cloak>
         <aside class="sidebar">
-            <div class="sidebar-top">
-                <div class="brand-card">
-                    <div class="brand-mark">
-                        <span>M</span>
-                    </div>
-                    <div class="brand-copy">
-                        <strong>SuperMew</strong>
-                        <span>AI Assistant</span>
-                    </div>
+            <div class="brand">
+                <div class="brand-mark">AI</div>
+                <div>
+                    <strong>SuperService</strong>
+                    <span>AI 客服中心</span>
                 </div>
-
-                <button @click="handleNewChat" :class="['sidebar-btn', { active: activeNav === 'newChat' }]">
-                    <i class="fas fa-pen-to-square"></i>
-                    <span>新建对话</span>
-                </button>
-                <button @click="handleHistory" :class="['sidebar-btn', { active: activeNav === 'history' }]">
-                    <i class="fas fa-clock-rotate-left"></i>
-                    <span>历史会话</span>
-                </button>
-                <button v-if="isAdmin" @click="handleSettings"
-                    :class="['sidebar-btn', { active: activeNav === 'settings' }]">
-                    <i class="fas fa-folder-open"></i>
-                    <span>知识库管理</span>
-                </button>
             </div>
 
-            <div class="sidebar-middle"></div>
-
-            <div class="sidebar-footer">
-                <button @click="handleClearChat" class="sidebar-btn danger-btn">
-                    <i class="fas fa-trash-can"></i>
-                    <span>清空当前对话</span>
+            <template v-if="isAuthenticated">
+                <button v-if="!isAdmin" :class="['nav-btn', {active: activeView === 'chat'}]" @click="activeView = 'chat'">
+                    <i class="fas fa-comments"></i><span>联系客服</span>
                 </button>
+                <button v-if="isAdmin" :class="['nav-btn', {active: activeView === 'workspace'}]" @click="activeView = 'workspace'; loadAdminConversations()">
+                    <i class="fas fa-headset"></i><span>客服工作台</span>
+                </button>
+                <button v-if="isAdmin" :class="['nav-btn', {active: activeView === 'users'}]" @click="activeView = 'users'; loadUsers()">
+                    <i class="fas fa-users"></i><span>用户管理</span>
+                </button>
+                <button v-if="isAdmin" :class="['nav-btn', {active: activeView === 'products'}]" @click="activeView = 'products'; loadProducts()">
+                    <i class="fas fa-box-open"></i><span>商品库</span>
+                </button>
+                <button v-if="isAdmin" :class="['nav-btn', {active: activeView === 'knowledge'}]" @click="activeView = 'knowledge'; refreshKnowledge()">
+                    <i class="fas fa-folder-open"></i><span>知识库</span>
+                </button>
+            </template>
 
-                <div v-if="isAuthenticated" class="profile-card">
-                    <div class="profile-avatar">
-                        {{ (currentUser.username || 'U').slice(0, 1).toUpperCase() }}
-                    </div>
-                    <div class="profile-copy">
-                        <strong>{{ currentUser.username }}</strong>
-                        <span>{{ currentUser.role === 'admin' ? '管理员' : '普通用户' }}</span>
-                    </div>
+            <div class="sidebar-spacer"></div>
+
+            <div v-if="isAuthenticated" class="profile">
+                <div class="avatar">{{ (currentUser.username || 'U').slice(0, 1).toUpperCase() }}</div>
+                <div>
+                    <strong>{{ currentUser.username }}</strong>
+                    <span>{{ isAdmin ? '管理员' : '用户' }}</span>
                 </div>
-
-                <button v-if="isAuthenticated" @click="handleLogout" class="sidebar-btn subtle-btn">
-                    <i class="fas fa-right-from-bracket"></i>
-                    <span>退出登录</span>
-                </button>
             </div>
+            <button v-if="isAuthenticated" class="nav-btn muted" @click="handleLogout">
+                <i class="fas fa-right-from-bracket"></i><span>退出登录</span>
+            </button>
         </aside>
 
-        <main class="main-panel">
-            <section v-if="!isAuthenticated" class="auth-screen">
-                <div class="auth-card">
-                    <div class="auth-hero">
-                        <div class="auth-badge">SuperMew</div>
-                        <h1>{{ authMode === 'login' ? '登录你的 AI 工作台' : '创建一个新的账号' }}</h1>
-                        <p>保留现有后端能力不变，只在前端提供更清晰、更现代的聊天与知识库工作体验。</p>
+        <main class="main">
+            <section v-if="!isAuthenticated" class="auth-view">
+                <div class="auth-panel">
+                    <div>
+                        <p class="eyebrow">SuperService Support</p>
+                        <h1>{{ authMode === 'login' ? '登录客服系统' : '创建账号' }}</h1>
+                        <p class="muted-text">用户登录后由 AI 客服优先接待，明确转人工后进入管理员工作台。</p>
                     </div>
-
-                    <div class="auth-form">
+                    <div class="form-stack">
                         <input v-model="authForm.username" type="text" placeholder="用户名">
                         <input v-model="authForm.password" type="password" placeholder="密码">
-                        <select v-if="authMode === 'register'" v-model="authForm.role">
-                            <option value="user">普通用户</option>
-                            <option value="admin">管理员</option>
-                        </select>
-                        <input v-if="authMode === 'register' && authForm.role === 'admin'" v-model="authForm.admin_code"
-                            type="password" placeholder="管理员邀请码">
-
-                        <button class="primary-btn auth-submit" :disabled="authLoading" @click="handleAuthSubmit">
+                        <button class="primary-btn" :disabled="authLoading" @click="handleAuthSubmit">
                             {{ authLoading ? '提交中...' : (authMode === 'login' ? '登录' : '注册') }}
                         </button>
-
-                        <button class="text-btn" @click="authMode = authMode === 'login' ? 'register' : 'login'">
+                        <button class="link-btn" @click="authMode = authMode === 'login' ? 'register' : 'login'">
                             {{ authMode === 'login' ? '没有账号？去注册' : '已有账号？去登录' }}
                         </button>
                     </div>
                 </div>
             </section>
 
-            <section v-else-if="activeNav === 'settings'" class="settings-view">
-                <header class="panel-header">
-                    <div class="settings-header-copy">
-                        <div class="eyebrow">Admin Console</div>
-                        <h2>知识库管理</h2>
-                        <p>上传、刷新和删除文档。后端接口保持不变，这里只重做页面呈现方式。</p>
+            <section v-else-if="!isAdmin && activeView === 'chat'" class="chat-view">
+                <header class="topbar">
+                    <div>
+                        <p class="eyebrow">Customer Chat</p>
+                        <h2>在线客服</h2>
+                    </div>
+                    <div class="topbar-actions">
+                        <button class="secondary-btn" @click="startNewSession">
+                            <i class="fas fa-plus"></i><span>新会话</span>
+                        </button>
+                        <button class="secondary-btn" @click="showUserHistory = !showUserHistory; loadSessions()">
+                            <i class="fas fa-clock-rotate-left"></i><span>历史会话</span>
+                        </button>
+                        <button v-if="messages.length && sessionStatus !== 'closed'" class="secondary-btn" :disabled="isLoading" @click="closeUserSession">
+                            <i class="fas fa-circle-check"></i><span>关闭会话</span>
+                        </button>
+                        <div class="status-pill" :class="sessionStatus">
+                            {{ statusText(sessionStatus) }}
+                        </div>
                     </div>
                 </header>
 
-                <div class="settings-grid">
-                    <div class="panel-card upload-card">
-                        <div class="card-head">
-                            <h3>上传文档</h3>
-                            <span>支持 PDF / Word / Excel</span>
-                        </div>
-
-                        <div class="upload-dropzone">
-                            <input type="file" ref="fileInput" @change="handleFileSelect" accept=".pdf,.doc,.docx,.xls,.xlsx"
-                                style="display: none">
-                            <div class="upload-icon"><i class="fas fa-cloud-arrow-up"></i></div>
-                            <p>将本地文档加入知识库，系统会沿用现有后端流程完成处理。</p>
-                            <button @click="$refs.fileInput.click()" class="primary-btn">
-                                选择文件
+                <div class="customer-chat-grid" :class="{ 'with-history': showUserHistory }">
+                    <aside v-if="showUserHistory" class="user-history-panel">
+                        <div class="history-title">
+                            <strong>历史会话</strong>
+                            <button class="icon-btn" @click="showUserHistory = false">
+                                <i class="fas fa-xmark"></i>
                             </button>
                         </div>
+                        <button v-for="session in sessions" :key="session.session_id" :class="['history-item', {active: session.session_id === sessionId}]" @click="openUserSession(session.session_id)">
+                            <strong>{{ session.last_message_preview || session.session_id }}</strong>
+                            <span>{{ statusText(session.status) }} · {{ session.message_count }} 条消息</span>
+                            <time>{{ new Date(session.updated_at).toLocaleString() }}</time>
+                        </button>
+                        <div v-if="sessions.length === 0" class="history-empty">暂无历史会话</div>
+                    </aside>
 
-                        <div v-if="selectedFile" class="selected-file-card">
-                            <div>
-                                <strong>{{ selectedFile.name }}</strong>
-                                <span>已选择，准备上传</span>
+                <div class="messages" ref="chatContainer">
+                    <div v-if="messages.length === 0" class="empty-state">
+                        <h3>你好，我是 SuperService AI 客服</h3>
+                        <p>你可以直接描述问题。需要真人处理时，点击“转人工”或直接输入“转人工”。</p>
+                    </div>
+                    <div v-for="message in messages" :key="message.localId || message.id" :class="['message-row', message.sender_type, {streaming: message.streaming}]">
+                            <div class="bubble">
+                                <div class="message-name">{{ senderName(message) }}</div>
+                                <div v-if="message.sender_type === 'ai' && message.content" v-html="parseMarkdown(message.content)"></div>
+                                <div v-else-if="message.sender_type !== 'ai'">{{ message.content }}</div>
+                                <div v-if="message.sender_type === 'ai' && hasLiveActivity(message)" class="ai-activity">
+                                    <div class="ai-activity-head">
+                                        <span class="typing-dots"><i></i><i></i><i></i></span>
+                                        <strong>{{ currentAiAction(message) }}</strong>
+                                    </div>
+                                    <div v-if="activitySteps(message).length" class="ai-activity-steps">
+                                        <div v-for="(step, index) in activitySteps(message)" :key="index" class="ai-activity-step">
+                                            <span>{{ step.icon || '•' }}</span>
+                                            <div>
+                                                <strong>{{ step.label || '正在处理' }}</strong>
+                                                <em v-if="step.detail">{{ step.detail }}</em>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-if="messageImages(message).length" class="message-images">
+                                    <figure v-for="(image, index) in messageImages(message)" :key="image.url + index" class="message-image-card">
+                                        <a :href="assetUrl(image.url)" target="_blank" rel="noopener">
+                                            <img :src="assetUrl(image.url)" :alt="imageAlt(image)">
+                                        </a>
+                                        <figcaption>
+                                            <strong>{{ image.caption || image.filename || 'PDF 图片' }}</strong>
+                                            <span>{{ imageMeta(image) }}</span>
+                                        </figcaption>
+                                    </figure>
+                                </div>
+                                <details v-if="hasRagDetails(message)" class="rag-trace" :open="message.streaming">
+                                    <summary>
+                                        <span>检索全流程</span>
+                                        <em v-if="ragTraceStatus(message)">{{ ragTraceStatus(message) }}</em>
+                                    </summary>
+
+                                    <div v-if="message.rag_steps && message.rag_steps.length" class="rag-steps">
+                                        <div v-for="(step, index) in message.rag_steps" :key="index" class="rag-step">
+                                            <span>{{ step.icon || '•' }}</span>
+                                            <strong>{{ step.label }}</strong>
+                                            <em v-if="step.detail">{{ step.detail }}</em>
+                                        </div>
+                                    </div>
+
+                                    <template v-if="message.rag_trace">
+                                        <div class="trace-pills">
+                                            <span v-if="message.rag_trace.retrieval_stage">阶段：{{ message.rag_trace.retrieval_stage }}</span>
+                                            <span v-if="message.rag_trace.retrieval_mode">模式：{{ message.rag_trace.retrieval_mode }}</span>
+                                            <span v-if="message.rag_trace.candidate_k">候选：{{ message.rag_trace.candidate_k }}</span>
+                                            <span>Rerank：{{ formatBool(message.rag_trace.rerank_applied) }}</span>
+                                            <span>Auto-merge：{{ formatBool(message.rag_trace.auto_merge_applied) }}</span>
+                                        </div>
+                                        <div class="trace-fields">
+                                            <div v-if="message.rag_trace.query">
+                                                <strong>原始查询</strong>
+                                                <p>{{ message.rag_trace.query }}</p>
+                                            </div>
+                                            <div v-if="message.rag_trace.expanded_query && message.rag_trace.expanded_query !== message.rag_trace.query">
+                                                <strong>扩展查询</strong>
+                                                <p>{{ message.rag_trace.expanded_query }}</p>
+                                            </div>
+                                            <div v-if="message.rag_trace.step_back_question">
+                                                <strong>退步问题</strong>
+                                                <p>{{ message.rag_trace.step_back_question }}</p>
+                                            </div>
+                                            <div v-if="message.rag_trace.step_back_answer">
+                                                <strong>退步答案</strong>
+                                                <p>{{ message.rag_trace.step_back_answer }}</p>
+                                            </div>
+                                            <div v-if="message.rag_trace.hypothetical_doc">
+                                                <strong>HyDE 文档</strong>
+                                                <p>{{ chunkPreview(message.rag_trace.hypothetical_doc) }}</p>
+                                            </div>
+                                        </div>
+                                        <div class="trace-chunks">
+                                            <strong>召回片段</strong>
+                                            <div v-if="traceChunks(message.rag_trace).length === 0" class="muted-text">本轮没有知识库召回片段</div>
+                                            <div v-for="(chunk, index) in traceChunks(message.rag_trace)" :key="index + (chunk.chunk_id || chunk.filename || '')" class="trace-chunk">
+                                                <div>
+                                                    <strong>#{{ index + 1 }} {{ chunk.filename || 'Unknown' }}</strong>
+                                                    <span>Page {{ displayPage(chunk.page_number) }} · L{{ chunk.chunk_level || '-' }} · score {{ formatScore(chunk.rerank_score ?? chunk.keyword_score ?? chunk.score) }}</span>
+                                                </div>
+                                                <p>{{ chunkPreview(chunk.text) }}</p>
+                                                <div v-if="visibleChunkImages(message, chunk).length" class="chunk-image-strip">
+                                                    <a v-for="(image, imageIndex) in visibleChunkImages(message, chunk)" :key="image.url + imageIndex" :href="assetUrl(image.url)" target="_blank" rel="noopener">
+                                                        <img :src="assetUrl(image.url)" :alt="imageAlt(image)">
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </details>
                             </div>
-                            <button @click="uploadDocument" class="primary-btn" :disabled="isUploading">
-                                {{ isUploading ? '上传中...' : '开始上传' }}
-                            </button>
-                        </div>
-
-                        <div v-if="uploadProgress" class="status-banner">
-                            {{ uploadProgress }}
                         </div>
                     </div>
+                </div>
 
-                    <div class="panel-card docs-card">
-                        <div class="card-head">
-                            <div>
-                                <h3>文档列表</h3>
-                                <span>当前已接入的知识文件</span>
-                            </div>
-                            <button @click="loadDocuments" class="ghost-btn">
-                                <i class="fas fa-rotate"></i>
-                                <span>刷新</span>
+                <footer class="composer">
+                    <button class="secondary-btn" :disabled="sessionStatus !== 'ai_active' || isLoading" @click="requestHuman">
+                        <i class="fas fa-headset"></i><span>转人工</span>
+                    </button>
+                    <textarea v-model="userInput" rows="1" :disabled="sessionStatus === 'closed'" :placeholder="sessionStatus === 'closed' ? '本次会话已结束，请新建会话继续咨询' : '输入你的问题...'" @keydown="handleUserKeydown"></textarea>
+                    <button class="send-btn" :disabled="sessionStatus === 'closed' || isLoading || !userInput.trim()" @click="sendUserMessage">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </footer>
+            </section>
+
+            <section v-else-if="isAdmin && activeView === 'workspace'" class="workspace-view">
+                <header class="topbar">
+                    <div>
+                        <p class="eyebrow">Agent Workspace</p>
+                        <h2>客服工作台</h2>
+                    </div>
+                    <button class="secondary-btn" @click="loadAdminConversations">
+                        <i class="fas fa-rotate"></i><span>刷新</span>
+                    </button>
+                </header>
+
+                <div class="workspace-grid">
+                    <aside class="queue-panel">
+                        <div class="filters">
+                            <button v-for="item in adminFilters" :key="item.value" :class="{active: adminStatusFilter === item.value}" @click="adminStatusFilter = item.value; loadAdminConversations()">
+                                <span>{{ item.label }}</span>
+                                <em v-if="item.badge === 'handoff_requested' && adminHandoffRequestCount">{{ adminHandoffRequestCount }}</em>
                             </button>
                         </div>
-
-                        <div v-if="documentsLoading" class="empty-state compact">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            <p>正在加载文档列表...</p>
+                        <div class="queue-list">
+                            <button v-for="item in adminConversations" :key="item.username + item.session_id" :class="['queue-item', {active: selectedConversation && selectedConversation.session_id === item.session_id && selectedConversation.username === item.username}]" @click="openConversation(item)">
+                                <strong>{{ item.username }}</strong>
+                                <span>{{ statusText(item.status) }}</span>
+                                <small>{{ item.last_message_preview || '暂无消息' }}</small>
+                                <em v-if="item.unread_user_count">{{ item.unread_user_count }}</em>
+                            </button>
                         </div>
+                    </aside>
 
-                        <div v-else-if="documents.length === 0" class="empty-state compact">
-                            <i class="fas fa-box-open"></i>
-                            <p>还没有上传任何文档。</p>
+                    <section class="agent-chat">
+                        <div v-if="!selectedConversation" class="empty-state">
+                            <h3>选择一个会话</h3>
+                            <p>全部、AI处理中、请求人工服务、人工处理中和已完成会话会显示在左侧。</p>
                         </div>
+                        <template v-else>
+                            <div class="conversation-head">
+                                <div>
+                                    <strong>{{ selectedConversation.username }}</strong>
+                                    <span>{{ selectedConversation.session_id }}</span>
+                                </div>
+                                <div class="action-row">
+                                    <button v-if="['ai_active', 'handoff_requested'].includes(selectedConversation.status)" class="agent-action-btn takeover-btn" @click="takeoverConversation">
+                                        {{ selectedConversation.status === 'ai_active' ? '接管' : '接入' }}
+                                    </button>
+                                    <button v-if="selectedConversation.status !== 'closed'" class="agent-action-btn close-btn" @click="closeConversation">关闭</button>
+                                    <button class="agent-action-btn delete-btn" @click="deleteConversation">
+                                        <i class="fas fa-trash"></i><span>删除记录</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="messages agent-messages" ref="adminMessagesContainer">
+                                <div v-for="message in adminMessages" :key="message.id || message.localId" :class="['message-row', message.sender_type, {streaming: message.streaming}]">
+                                    <div class="bubble">
+                                        <div class="message-name">{{ senderName(message, 'admin') }}</div>
+                                        <div v-if="message.sender_type === 'ai' && message.content" v-html="parseMarkdown(message.content)"></div>
+                                        <div v-else-if="message.sender_type !== 'ai'">{{ message.content }}</div>
+                                        <div v-if="message.sender_type === 'ai' && hasLiveActivity(message)" class="ai-activity">
+                                            <div class="ai-activity-head">
+                                                <span class="typing-dots"><i></i><i></i><i></i></span>
+                                                <strong>{{ currentAiAction(message) }}</strong>
+                                            </div>
+                                            <div v-if="activitySteps(message).length" class="ai-activity-steps">
+                                                <div v-for="(step, index) in activitySteps(message)" :key="index" class="ai-activity-step">
+                                                    <span>{{ step.icon || '•' }}</span>
+                                                    <div>
+                                                        <strong>{{ step.label || '正在处理' }}</strong>
+                                                        <em v-if="step.detail">{{ step.detail }}</em>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div v-if="messageImages(message).length" class="message-images">
+                                            <figure v-for="(image, index) in messageImages(message)" :key="image.url + index" class="message-image-card">
+                                                <a :href="assetUrl(image.url)" target="_blank" rel="noopener">
+                                                    <img :src="assetUrl(image.url)" :alt="imageAlt(image)">
+                                                </a>
+                                                <figcaption>
+                                                    <strong>{{ image.caption || image.filename || 'PDF 图片' }}</strong>
+                                                    <span>{{ imageMeta(image) }}</span>
+                                                </figcaption>
+                                            </figure>
+                                        </div>
+                                        <details v-if="hasRagDetails(message)" class="rag-trace" :open="message.streaming">
+                                            <summary>
+                                                <span>检索全流程</span>
+                                                <em v-if="ragTraceStatus(message)">{{ ragTraceStatus(message) }}</em>
+                                            </summary>
 
-                        <div v-else class="document-list">
-                            <div v-for="doc in documents" :key="doc.filename" class="document-row">
-                                <div class="document-icon">
-                                    <i :class="getFileIcon(doc.file_type)"></i>
+                                            <div v-if="message.rag_steps && message.rag_steps.length" class="rag-steps">
+                                                <div v-for="(step, index) in message.rag_steps" :key="index" class="rag-step">
+                                                    <span>{{ step.icon || '•' }}</span>
+                                                    <strong>{{ step.label }}</strong>
+                                                    <em v-if="step.detail">{{ step.detail }}</em>
+                                                </div>
+                                            </div>
+
+                                            <template v-if="message.rag_trace">
+                                                <div class="trace-pills">
+                                                    <span v-if="message.rag_trace.retrieval_stage">阶段：{{ message.rag_trace.retrieval_stage }}</span>
+                                                    <span v-if="message.rag_trace.retrieval_mode">模式：{{ message.rag_trace.retrieval_mode }}</span>
+                                                    <span v-if="message.rag_trace.candidate_k">候选：{{ message.rag_trace.candidate_k }}</span>
+                                                    <span>Rerank：{{ formatBool(message.rag_trace.rerank_applied) }}</span>
+                                                    <span>Auto-merge：{{ formatBool(message.rag_trace.auto_merge_applied) }}</span>
+                                                </div>
+                                                <div class="trace-fields">
+                                                    <div v-if="message.rag_trace.query">
+                                                        <strong>原始查询</strong>
+                                                        <p>{{ message.rag_trace.query }}</p>
+                                                    </div>
+                                                    <div v-if="message.rag_trace.expanded_query && message.rag_trace.expanded_query !== message.rag_trace.query">
+                                                        <strong>扩展查询</strong>
+                                                        <p>{{ message.rag_trace.expanded_query }}</p>
+                                                    </div>
+                                                    <div v-if="message.rag_trace.step_back_question">
+                                                        <strong>退步问题</strong>
+                                                        <p>{{ message.rag_trace.step_back_question }}</p>
+                                                    </div>
+                                                    <div v-if="message.rag_trace.step_back_answer">
+                                                        <strong>退步答案</strong>
+                                                        <p>{{ message.rag_trace.step_back_answer }}</p>
+                                                    </div>
+                                                    <div v-if="message.rag_trace.hypothetical_doc">
+                                                        <strong>HyDE 文档</strong>
+                                                        <p>{{ chunkPreview(message.rag_trace.hypothetical_doc) }}</p>
+                                                    </div>
+                                                </div>
+                                                <div class="trace-chunks">
+                                                    <strong>召回片段</strong>
+                                                    <div v-if="traceChunks(message.rag_trace).length === 0" class="muted-text">本轮没有知识库召回片段</div>
+                                                    <div v-for="(chunk, index) in traceChunks(message.rag_trace)" :key="index + (chunk.chunk_id || chunk.filename || '')" class="trace-chunk">
+                                                        <div>
+                                                            <strong>#{{ index + 1 }} {{ chunk.filename || 'Unknown' }}</strong>
+                                                            <span>Page {{ displayPage(chunk.page_number) }} · L{{ chunk.chunk_level || '-' }} · score {{ formatScore(chunk.rerank_score ?? chunk.keyword_score ?? chunk.score) }}</span>
+                                                        </div>
+                                                        <p>{{ chunkPreview(chunk.text) }}</p>
+                                                        <div v-if="visibleChunkImages(message, chunk).length" class="chunk-image-strip">
+                                                            <a v-for="(image, imageIndex) in visibleChunkImages(message, chunk)" :key="image.url + imageIndex" :href="assetUrl(image.url)" target="_blank" rel="noopener">
+                                                                <img :src="assetUrl(image.url)" :alt="imageAlt(image)">
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </details>
+                                    </div>
                                 </div>
-                                <div class="document-copy">
-                                    <strong>{{ doc.filename }}</strong>
-                                    <span>{{ doc.file_type }} · {{ doc.chunk_count }} 个文本片段</span>
-                                </div>
-                                <button @click="deleteDocument(doc.filename)" class="icon-action danger"
-                                    title="删除文档">
+                            </div>
+                            <footer class="composer">
+                                <textarea v-model="adminReply" rows="1" placeholder="输入人工客服回复..." @keydown="handleAdminKeydown"></textarea>
+                                <button class="send-btn" :disabled="!canReply" @click="sendAdminReply">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </footer>
+                        </template>
+                    </section>
+                </div>
+            </section>
+
+            <section v-else-if="isAdmin && activeView === 'users'" class="plain-view">
+                <header class="topbar">
+                    <div>
+                        <p class="eyebrow">Users</p>
+                        <h2>用户管理</h2>
+                    </div>
+                    <div class="topbar-actions">
+                        <input class="search-input" v-model="userKeyword" type="text" placeholder="搜索用户名或角色" @keydown.enter="loadUsers">
+                        <button class="secondary-btn" @click="loadUsers">
+                            <i class="fas fa-magnifying-glass"></i><span>查找</span>
+                        </button>
+                        <button class="secondary-btn" @click="clearUserSearch">
+                            <i class="fas fa-rotate"></i><span>重置</span>
+                        </button>
+                    </div>
+                </header>
+                <div class="users-grid">
+                    <form class="panel user-form-panel" @submit.prevent="saveUser">
+                        <h3>{{ editingUserId ? '编辑用户' : '新增用户' }}</h3>
+                        <input v-model="userForm.username" type="text" placeholder="用户名">
+                        <input v-model="userForm.password" type="password" :placeholder="editingUserId ? '新密码（留空不修改）' : '密码'">
+                        <select v-model="userForm.role">
+                            <option value="user">普通用户</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                        <div class="action-row">
+                            <button class="primary-btn" type="submit" :disabled="userSaving">
+                                <i class="fas fa-floppy-disk"></i><span>{{ userSaving ? '保存中...' : '保存用户' }}</span>
+                            </button>
+                            <button v-if="editingUserId" class="secondary-btn" type="button" @click="resetUserForm">
+                                <i class="fas fa-xmark"></i><span>取消编辑</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="table-card users-table">
+                        <div class="table-row user-row user-row-head">
+                            <strong>用户名</strong>
+                            <span>角色</span>
+                            <span>会话数</span>
+                            <span>创建时间</span>
+                            <span>操作</span>
+                        </div>
+                        <div v-if="users.length === 0" class="history-empty">暂无用户</div>
+                        <div v-for="user in users" :key="user.id" class="table-row user-row">
+                            <strong>{{ user.username }}</strong>
+                            <span>{{ user.role === 'admin' ? '管理员' : '普通用户' }}</span>
+                            <span>{{ user.session_count }} 个会话</span>
+                            <time>{{ new Date(user.created_at).toLocaleString() }}</time>
+                            <div class="table-actions">
+                                <button class="icon-btn" type="button" title="编辑用户" @click="editUser(user)">
+                                    <i class="fas fa-pen"></i>
+                                </button>
+                                <button class="icon-btn danger" type="button" title="删除用户" @click="deleteUser(user)">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -185,289 +452,199 @@
                 </div>
             </section>
 
-            <section v-else class="chat-layout">
-                <header class="panel-header chat-topbar">
-                    <div class="header-pills">
-                        <span class="header-pill">
-                            <i class="fas fa-circle"></i>
-                            {{ isLoading ? '正在响应' : '在线' }}
-                        </span>
-                        <span class="header-pill muted">{{ isAdmin ? '管理员模式' : '用户模式' }}</span>
+            <section v-else-if="isAdmin && activeView === 'products'" class="plain-view">
+                <header class="topbar">
+                    <div>
+                        <p class="eyebrow">Products</p>
+                        <h2>商品库管理</h2>
+                    </div>
+                    <div class="topbar-actions">
+                        <input class="search-input" v-model="productKeyword" type="text" placeholder="搜索商品名、类别、材质" @keydown.enter="loadProducts">
+                        <button class="secondary-btn" @click="loadProducts">
+                            <i class="fas fa-magnifying-glass"></i><span>查找</span>
+                        </button>
+                        <button class="secondary-btn" @click="clearProductSearch">
+                            <i class="fas fa-rotate"></i><span>重置</span>
+                        </button>
                     </div>
                 </header>
-
-                <div class="chat-body">
-                    <div v-if="showHistorySidebar" class="history-drawer">
-                        <div class="drawer-head">
-                            <div>
-                                <div class="eyebrow">History</div>
-                                <h3>历史会话</h3>
-                            </div>
-                            <button @click="showHistorySidebar = false" class="icon-action">
-                                <i class="fas fa-xmark"></i>
-                            </button>
-                        </div>
-
-                        <div v-if="sessions.length === 0" class="empty-state compact">
-                            <i class="fas fa-clock-rotate-left"></i>
-                            <p>暂无历史会话。</p>
-                        </div>
-
-                        <div v-else class="session-list">
-                            <div v-for="session in sessions" :key="session.session_id" class="session-card"
-                                :class="{ active: session.session_id === sessionId }">
-                                <div class="session-card-body" @click="loadSession(session.session_id)">
-                                    <strong>{{ session.session_id }}</strong>
-                                    <span>{{ session.message_count }} 条消息</span>
-                                    <time>{{ new Date(session.updated_at).toLocaleString() }}</time>
-                                </div>
-                                <button class="icon-action" title="删除会话"
-                                    @click.stop="deleteSession(session.session_id)">
-                                    <i class="fas fa-trash"></i>
+                <div class="products-grid">
+                    <form class="panel product-form-panel" @submit.prevent="saveProduct">
+                        <div class="product-form-head">
+                            <h3>{{ editingProductId ? '编辑商品' : '新增商品' }}</h3>
+                            <div class="action-row">
+                                <button v-if="editingProductId" class="secondary-btn" type="button" @click="resetProductForm">
+                                    <i class="fas fa-arrow-left"></i><span>返回</span>
+                                </button>
+                                <button class="primary-btn" type="submit" :disabled="productSaving">
+                                    <i class="fas fa-floppy-disk"></i><span>{{ productSaving ? '保存中...' : '保存商品' }}</span>
                                 </button>
                             </div>
                         </div>
+                        <input v-model="productForm.name" type="text" placeholder="商品名">
+                        <input v-model="productForm.category" type="text" placeholder="类别">
+                        <div class="form-two">
+                            <input v-model="productForm.price" type="text" placeholder="价格，例如 299 元">
+                            <input v-model.number="productForm.stock" type="number" min="0" step="1" placeholder="库存">
+                        </div>
+                        <input v-model="productForm.material" type="text" placeholder="材质">
+                        <textarea v-model="productForm.specifications" rows="4" placeholder="规格，例如尺寸、颜色、重量、型号等"></textarea>
+                        <input ref="productImageInput" type="file" accept=".jpg,.jpeg,.png,.webp,.gif" @change="handleProductImageSelect">
+                        <figure v-if="productForm.image_url" class="product-current-image">
+                            <img :src="assetUrl(productForm.image_url)" :alt="productForm.name || '商品图'">
+                            <figcaption>当前商品图</figcaption>
+                        </figure>
+                        <p v-if="productNotice" class="notice">{{ productNotice }}</p>
+                    </form>
+
+                    <div class="product-list-panel">
+                        <div v-if="products.length === 0" class="history-empty">暂无商品</div>
+                        <article v-for="product in products" :key="product.id" class="product-card">
+                            <div class="product-thumb">
+                                <img v-if="product.image_url" :src="assetUrl(product.image_url)" :alt="product.name">
+                                <i v-else class="fas fa-image"></i>
+                            </div>
+                            <div class="product-main">
+                                <div class="product-title-row">
+                                    <div>
+                                        <strong>{{ product.name }}</strong>
+                                        <span>{{ product.category || '未分类' }}</span>
+                                    </div>
+                                    <div class="table-actions">
+                                        <button class="icon-btn" type="button" title="编辑商品" @click="editProduct(product)">
+                                            <i class="fas fa-pen"></i>
+                                        </button>
+                                        <button class="icon-btn danger" type="button" title="删除商品" @click="deleteProduct(product)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="product-meta-grid">
+                                    <div><span>价格</span><strong>{{ product.price || '-' }}</strong></div>
+                                    <div><span>库存</span><strong>{{ product.stock }}</strong></div>
+                                    <div><span>材质</span><strong>{{ product.material || '-' }}</strong></div>
+                                </div>
+                                <p>{{ product.specifications || '未填写规格' }}</p>
+                            </div>
+                        </article>
                     </div>
+                </div>
+            </section>
 
-                    <div class="conversation-panel">
-                        <div class="chat-container" ref="chatContainer">
-                            <div v-if="messages.length === 0" class="hero-welcome">
-                                <div class="hero-badge">
-                                    <span class="hero-dot"></span>
-                                    <span>SuperMew</span>
-                                </div>
-                                <h3>开始一个新对话</h3>
-
-                                <div class="prompt-grid">
-                                    <button v-for="prompt in quickPrompts" :key="prompt" class="prompt-card"
-                                        @click="applyPrompt(prompt)">
-                                        <span>{{ prompt }}</span>
-                                        <i class="fas fa-arrow-up-right-from-square"></i>
-                                    </button>
-                                </div>
+            <section v-else-if="isAdmin && activeView === 'knowledge'" class="plain-view">
+                <header class="topbar">
+                    <div>
+                        <p class="eyebrow">Knowledge Base</p>
+                        <h2>知识库管理</h2>
+                    </div>
+                    <button class="secondary-btn" @click="refreshKnowledge">
+                        <i class="fas fa-rotate"></i><span>刷新</span>
+                    </button>
+                </header>
+                <div class="knowledge-grid">
+                    <div class="panel">
+                        <h3>上传文档</h3>
+                        <p class="muted-text">支持 PDF、Word、Excel，上传后进入现有 RAG 知识库。</p>
+                        <input ref="fileInput" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" @change="handleFileSelect">
+                        <button class="primary-btn" :disabled="!selectedFile || isUploading" @click="uploadDocument">
+                            {{ isUploading ? '上传中...' : '上传到知识库' }}
+                        </button>
+                        <p v-if="uploadProgress" class="notice">{{ uploadProgress }}</p>
+                    </div>
+                    <div class="panel">
+                        <h3>文档列表</h3>
+                        <div v-if="documents.length === 0" class="muted-text">暂无文档</div>
+                        <div v-for="doc in documents" :key="doc.filename" class="doc-row">
+                            <div>
+                                <strong>{{ doc.filename }}</strong>
+                                <span>{{ doc.file_type }} · {{ doc.chunk_count }} 个片段</span>
                             </div>
-
-                            <div v-for="(msg, index) in messages" :key="index"
-                                :class="['message-row', msg.isUser ? 'is-user' : 'is-assistant']">
-                                <div class="message-avatar">
-                                    <span v-if="msg.isUser">{{ (currentUser?.username || 'U').slice(0, 1).toUpperCase() }}</span>
-                                    <i v-else class="fas fa-sparkles"></i>
-                                </div>
-
-                                <div class="message-stack">
-                                    <div class="message-label">{{ msg.isUser ? '你' : 'SuperMew' }}</div>
-
-                                    <div v-if="!msg.isUser && msg.isThinking && !msg.text"
-                                        class="message-card thinking-card">
-                                        <div class="thinking-line">
-                                            <span class="thinking-loader"></span>
-                                            <span>{{ !msg.ragSteps || !msg.ragSteps.length ? '正在思考中...' :
-                                                msg.ragSteps[msg.ragSteps.length - 1].label }}</span>
-                                        </div>
-                                        <div v-if="msg.ragSteps && msg.ragSteps.length" class="thinking-steps">
-                                            <div v-for="(step, sIdx) in msg.ragSteps" :key="sIdx" class="thinking-step">
-                                                <span class="thinking-step-icon">{{ step.icon || '•' }}</span>
-                                                <span>{{ step.label }}</span>
-                                                <small v-if="step.detail">{{ step.detail }}</small>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div v-else class="message-card"
-                                        :class="msg.isUser ? 'user-card' : 'assistant-card'"
-                                        v-html="msg.isUser ? escapeHtml(msg.text) : parseMarkdown(msg.text)"></div>
-
-                                    <div v-if="!msg.isUser && msg.attachments && msg.attachments.length"
-                                        class="pdf-image-strip">
-                                        <figure v-for="image in msg.attachments" :key="image.url" class="pdf-image-card">
-                                            <img :src="image.url" :alt="`${image.filename || 'PDF'} page ${Number(image.page_number || 0) + 1}`">
-                                            <figcaption>
-                                                <span>{{ image.filename }}</span>
-                                                <small>Page {{ Number(image.page_number || 0) + 1 }}</small>
-                                            </figcaption>
-                                        </figure>
-                                    </div>
-
-                                    <div v-if="!msg.isUser && msg.ragTrace" class="message-meta-card">
-                                        <details class="reasoning-details">
-                                            <summary>查看检索过程</summary>
-                                            <div class="reasoning-content">
-                                                <div class="trace-line">
-                                                    工具：{{ msg.ragTrace.tool_used ? msg.ragTrace.tool_name : '未使用' }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.retrieval_stage" class="trace-line">
-                                                    检索阶段：{{ msg.ragTrace.retrieval_stage }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.grade_score" class="trace-line">
-                                                    相关性评分：{{ msg.ragTrace.grade_score }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.grade_route" class="trace-line">
-                                                    路由策略：{{ msg.ragTrace.grade_route }}
-                                                </div>
-                                                <div
-                                                    v-if="msg.ragTrace.rewrite_needed !== null && msg.ragTrace.rewrite_needed !== undefined"
-                                                    class="trace-line">
-                                                    是否重写查询：{{ msg.ragTrace.rewrite_needed ? '是' : '否' }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.rewrite_strategy" class="trace-line">
-                                                    重写策略：{{ msg.ragTrace.rewrite_strategy }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.rewrite_query" class="trace-line">
-                                                    重写查询：{{ msg.ragTrace.rewrite_query }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.retrieval_mode" class="trace-line">
-                                                    检索模式：{{ msg.ragTrace.retrieval_mode }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.candidate_k" class="trace-line">
-                                                    候选召回数：{{ msg.ragTrace.candidate_k }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.leaf_retrieve_level" class="trace-line">
-                                                    叶子召回层级：{{ msg.ragTrace.leaf_retrieve_level }}
-                                                </div>
-                                                <div
-                                                    v-if="msg.ragTrace.auto_merge_enabled !== null && msg.ragTrace.auto_merge_enabled !== undefined"
-                                                    class="trace-line">
-                                                    Auto-merge 启用：{{ msg.ragTrace.auto_merge_enabled ? '是' : '否' }}
-                                                </div>
-                                                <div
-                                                    v-if="msg.ragTrace.auto_merge_applied !== null && msg.ragTrace.auto_merge_applied !== undefined"
-                                                    class="trace-line">
-                                                    Auto-merge 已应用：{{ msg.ragTrace.auto_merge_applied ? '是' : '否' }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.auto_merge_threshold" class="trace-line">
-                                                    合并阈值：{{ msg.ragTrace.auto_merge_threshold }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.auto_merge_replaced_chunks" class="trace-line">
-                                                    替换片段数：{{ msg.ragTrace.auto_merge_replaced_chunks }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.auto_merge_steps" class="trace-line">
-                                                    合并轮次：{{ msg.ragTrace.auto_merge_steps }}
-                                                </div>
-                                                <div
-                                                    v-if="msg.ragTrace.rerank_enabled !== null && msg.ragTrace.rerank_enabled !== undefined"
-                                                    class="trace-line">
-                                                    Rerank 已配置：{{ msg.ragTrace.rerank_enabled ? '是' : '否' }}
-                                                </div>
-                                                <div
-                                                    v-if="msg.ragTrace.rerank_applied !== null && msg.ragTrace.rerank_applied !== undefined"
-                                                    class="trace-line">
-                                                    Rerank 已执行：{{ msg.ragTrace.rerank_applied ? '是' : '否' }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.rerank_model" class="trace-line">
-                                                    Rerank 模型：{{ msg.ragTrace.rerank_model }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.rerank_error" class="trace-line">
-                                                    Rerank 状态：{{ msg.ragTrace.rerank_error }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.expansion_type" class="trace-line">
-                                                    查询扩展策略：{{ msg.ragTrace.expansion_type }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.step_back_question" class="trace-line">
-                                                    Step-back 问题：{{ msg.ragTrace.step_back_question }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.expanded_query" class="trace-line">
-                                                    扩展查询：{{ msg.ragTrace.expanded_query }}
-                                                </div>
-                                                <div v-if="msg.ragTrace.hypothetical_doc" class="trace-line">
-                                                    HyDE 文档：{{ msg.ragTrace.hypothetical_doc }}
-                                                </div>
-
-                                                <div
-                                                    v-if="msg.ragTrace.initial_retrieved_chunks && msg.ragTrace.initial_retrieved_chunks.length"
-                                                    class="sources">
-                                                    <div class="sources-title">初次检索结果</div>
-                                                    <ul class="sources-list">
-                                                        <li v-for="(chunk, sIndex) in msg.ragTrace.initial_retrieved_chunks"
-                                                            :key="sIndex" class="source-item">
-                                                            <div class="source-title-line">
-                                                                <span class="source-file">{{ chunk.filename }}</span>
-                                                                <span v-if="chunk.page_number" class="source-page">第 {{
-                                                                    chunk.page_number }} 页</span>
-                                                            </div>
-                                                            <div class="source-meta-line">
-                                                                <span>RRF 排名：{{ chunk.rrf_rank || (sIndex + 1) }}</span>
-                                                                <span
-                                                                    v-if="chunk.rerank_score !== null && chunk.rerank_score !== undefined">
-                                                                    Rerank 分数：{{ Number(chunk.rerank_score).toFixed(4) }}
-                                                                </span>
-                                                            </div>
-                                                            <div v-if="chunk.text" class="source-excerpt">{{ chunk.text }}</div>
-                                                        </li>
-                                                    </ul>
-                                                </div>
-
-                                                <div
-                                                    v-if="msg.ragTrace.expanded_retrieved_chunks && msg.ragTrace.expanded_retrieved_chunks.length"
-                                                    class="sources">
-                                                    <div class="sources-title">重写后检索结果</div>
-                                                    <ul class="sources-list">
-                                                        <li
-                                                            v-for="(chunk, sIndex) in msg.ragTrace.expanded_retrieved_chunks"
-                                                            :key="sIndex" class="source-item">
-                                                            <div class="source-title-line">
-                                                                <span class="source-file">{{ chunk.filename }}</span>
-                                                                <span v-if="chunk.page_number" class="source-page">第 {{
-                                                                    chunk.page_number }} 页</span>
-                                                            </div>
-                                                            <div class="source-meta-line">
-                                                                <span>RRF 排名：{{ chunk.rrf_rank || (sIndex + 1) }}</span>
-                                                                <span
-                                                                    v-if="chunk.rerank_score !== null && chunk.rerank_score !== undefined">
-                                                                    Rerank 分数：{{ Number(chunk.rerank_score).toFixed(4) }}
-                                                                </span>
-                                                            </div>
-                                                            <div v-if="chunk.text" class="source-excerpt">{{ chunk.text }}</div>
-                                                        </li>
-                                                    </ul>
-                                                </div>
-
-                                                <div
-                                                    v-if="msg.ragTrace.retrieved_chunks && msg.ragTrace.retrieved_chunks.length && !(msg.ragTrace.initial_retrieved_chunks && msg.ragTrace.initial_retrieved_chunks.length) && !(msg.ragTrace.expanded_retrieved_chunks && msg.ragTrace.expanded_retrieved_chunks.length)"
-                                                    class="sources">
-                                                    <div class="sources-title">向量检索结果</div>
-                                                    <ul class="sources-list">
-                                                        <li v-for="(chunk, sIndex) in msg.ragTrace.retrieved_chunks"
-                                                            :key="sIndex" class="source-item">
-                                                            <div class="source-title-line">
-                                                                <span class="source-file">{{ chunk.filename }}</span>
-                                                                <span v-if="chunk.page_number" class="source-page">第 {{
-                                                                    chunk.page_number }} 页</span>
-                                                            </div>
-                                                            <div class="source-meta-line">
-                                                                <span>RRF 排名：{{ chunk.rrf_rank || (sIndex + 1) }}</span>
-                                                                <span
-                                                                    v-if="chunk.rerank_score !== null && chunk.rerank_score !== undefined">
-                                                                    Rerank 分数：{{ Number(chunk.rerank_score).toFixed(4) }}
-                                                                </span>
-                                                            </div>
-                                                            <div v-if="chunk.text" class="source-excerpt">{{ chunk.text }}</div>
-                                                        </li>
-                                                    </ul>
-                                                </div>
-                                            </div>
-                                        </details>
-                                    </div>
-                                </div>
-                            </div>
+                            <button class="icon-btn danger" @click="deleteDocument(doc.filename)">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
-
-                        <div class="composer-wrap">
-                            <div class="composer-shell">
-                                <div class="input-area">
-                                    <textarea v-model="userInput" @keydown="handleKeyDown"
-                                        @compositionstart="handleCompositionStart" @compositionend="handleCompositionEnd"
-                                        @input="autoResize" placeholder="给 SuperMew 发送消息..." rows="1"
-                                        ref="textarea"></textarea>
-                                    <button v-if="isLoading" @click="handleStop" class="send-btn stop-btn"
-                                        title="停止生成">
-                                        <i class="fas fa-stop"></i>
-                                    </button>
-                                    <button v-else @click="handleSend" class="send-btn" title="发送">
-                                        <i class="fas fa-arrow-up"></i>
-                                    </button>
+                    </div>
+                    <div class="panel rag-flow-panel">
+                        <h3>索引与检索链路</h3>
+                        <div v-if="!ragPipeline" class="muted-text">正在加载链路状态...</div>
+                        <template v-else>
+                            <div class="pipeline-metrics">
+                                <div>
+                                    <span>集合</span>
+                                    <strong>{{ ragPipeline.settings.collection }}</strong>
+                                </div>
+                                <div>
+                                    <span>召回模式</span>
+                                    <strong>{{ ragPipeline.settings.sparse_method }} + Dense</strong>
+                                </div>
+                                <div>
+                                    <span>融合</span>
+                                    <strong>{{ ragPipeline.settings.fusion }}</strong>
+                                </div>
+                                <div>
+                                    <span>精排</span>
+                                    <strong>{{ formatBool(ragPipeline.settings.rerank_enabled) }}</strong>
                                 </div>
                             </div>
-                        </div>
+
+                            <div class="flow-columns">
+                                <div>
+                                    <h4>索引流程</h4>
+                                    <div v-for="step in ragPipeline.indexing_flow" :key="step.name" class="flow-item">
+                                        <strong>{{ step.name }}</strong>
+                                        <span>{{ step.detail }}</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4>检索流程</h4>
+                                    <div v-for="step in ragPipeline.retrieval_flow" :key="step.name" class="flow-item">
+                                        <strong>{{ step.name }}</strong>
+                                        <span>{{ step.detail }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="doc-stats">
+                                <h4>当前索引统计</h4>
+                                <div v-if="ragPipeline.document_stats.length === 0" class="muted-text">暂无索引片段</div>
+                                <div v-for="stat in ragPipeline.document_stats" :key="stat.filename" class="stat-row">
+                                    <strong>{{ stat.filename }}</strong>
+                                    <span>L1 {{ stat.level_1 || 0 }} · L2 {{ stat.level_2 || 0 }} · L3 {{ stat.level_3 || 0 }}</span>
+                                </div>
+                            </div>
+
+                            <div class="rag-diagnostic">
+                                <h4>检索测试</h4>
+                                <div class="diagnostic-input">
+                                    <input v-model="ragTestQuery" type="text" placeholder="输入要测试的问题" @keydown.enter="runRagDiagnostic">
+                                    <button class="secondary-btn" :disabled="ragTestLoading || !ragTestQuery.trim()" @click="runRagDiagnostic">
+                                        <i class="fas fa-magnifying-glass"></i><span>{{ ragTestLoading ? '检索中...' : '测试' }}</span>
+                                    </button>
+                                </div>
+                                <div v-if="ragTestResult" class="diagnostic-result">
+                                    <div class="result-meta">
+                                        <span>模式：{{ ragTestResult.meta.retrieval_mode || '-' }}</span>
+                                        <span>候选：{{ ragTestResult.meta.candidate_count ?? ragTestResult.chunks.length }}</span>
+                                        <span>Rerank：{{ formatBool(ragTestResult.meta.rerank_applied) }}</span>
+                                        <span>Auto-merge：{{ formatBool(ragTestResult.meta.auto_merge_applied) }}</span>
+                                    </div>
+                                    <p v-if="ragTestResult.meta.retrieval_error" class="warning-text">
+                                        {{ ragTestResult.meta.retrieval_error }}
+                                    </p>
+                                    <p v-if="ragTestResult.meta.rerank_error" class="warning-text">
+                                        Rerank：{{ ragTestResult.meta.rerank_error }}
+                                    </p>
+                                    <div v-if="ragTestResult.chunks.length === 0" class="muted-text">没有召回片段</div>
+                                    <div v-for="chunk in ragTestResult.chunks" :key="chunk.rank + chunk.chunk_id" class="chunk-row">
+                                        <div>
+                                            <strong>#{{ chunk.rank }} {{ chunk.filename }}</strong>
+                                            <span>Page {{ chunk.page_number }} · L{{ chunk.chunk_level }} · score {{ formatScore(chunk.rerank_score ?? chunk.keyword_score ?? chunk.score) }}</span>
+                                        </div>
+                                        <p>{{ chunkPreview(chunk.text) }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </section>

@@ -12,10 +12,20 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import User
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-secret")
+ENVIRONMENT = os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")).strip().lower()
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+if not SECRET_KEY:
+    if ENVIRONMENT in {"prod", "production"}:
+        raise RuntimeError("生产环境必须配置 JWT_SECRET_KEY")
+    SECRET_KEY = "dev-only-change-this-secret"
+elif ENVIRONMENT in {"prod", "production"} and SECRET_KEY in {
+    "change-this-secret",
+    "replace-me-with-a-long-random-secret",
+    "dev-only-change-this-secret",
+}:
+    raise RuntimeError("生产环境不能使用默认 JWT_SECRET_KEY")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
-ADMIN_INVITE_CODE = os.getenv("ADMIN_INVITE_CODE", "")
 PBKDF2_ROUNDS = int(os.getenv("PASSWORD_PBKDF2_ROUNDS", "310000"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -117,16 +127,24 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
+def get_user_from_token(token: str, db: Session) -> User | None:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if not username:
+            return None
+    except JWTError:
+        return None
+    return db.query(User).filter(User.username == username).first()
+
+
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理员权限不足")
     return current_user
 
 
-def resolve_role(requested_role: str | None, admin_code: str | None) -> str:
-    role = (requested_role or "user").strip().lower()
-    if role != "admin":
-        return "user"
-    if ADMIN_INVITE_CODE and admin_code == ADMIN_INVITE_CODE:
-        return "admin"
-    raise HTTPException(status_code=403, detail="管理员邀请码错误")
+def require_user(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != "user":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="用户权限不足")
+    return current_user

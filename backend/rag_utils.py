@@ -1,7 +1,9 @@
 from collections import defaultdict
+from collections import Counter
 from typing import List, Tuple, Dict, Any
 import os
 import json
+import math
 import requests
 from dotenv import load_dotenv
 
@@ -22,6 +24,8 @@ RERANK_API_KEY = os.getenv("RERANK_API_KEY")
 AUTO_MERGE_ENABLED = os.getenv("AUTO_MERGE_ENABLED", "true").lower() != "false"
 AUTO_MERGE_THRESHOLD = int(os.getenv("AUTO_MERGE_THRESHOLD", "2"))
 LEAF_RETRIEVE_LEVEL = int(os.getenv("LEAF_RETRIEVE_LEVEL", "3"))
+KEYWORD_FALLBACK_SCAN_LIMIT = int(os.getenv("KEYWORD_FALLBACK_SCAN_LIMIT", "10000"))
+CANDIDATE_MULTIPLIER = max(1, int(os.getenv("RETRIEVAL_CANDIDATE_MULTIPLIER", "2")))
 
 # 全局初始化检索依赖，避免反复构造
 _embedding_service = EmbeddingService()
@@ -36,6 +40,131 @@ def _get_rerank_endpoint() -> str:
         return ""
     host = RERANK_BINDING_HOST.strip().rstrip("/")
     return host if host.endswith("/v1/rerank") else f"{host}/v1/rerank"
+
+
+def _retrieval_output_fields() -> list[str]:
+    return [
+        "text",
+        "filename",
+        "file_type",
+        "page_number",
+        "chunk_id",
+        "parent_chunk_id",
+        "root_chunk_id",
+        "chunk_level",
+        "chunk_idx",
+        "content_kind",
+        "image_url",
+        "image_caption",
+        "visual_description",
+    ]
+
+
+def _score_keyword_candidates(query: str, docs: List[dict], top_n: int) -> List[dict]:
+    query_tokens = _embedding_service.tokenize(query)
+    if not query_tokens or not docs:
+        return []
+
+    doc_tokens = []
+    doc_freq = Counter()
+    total_len = 0
+    for doc in docs:
+        tokens = _embedding_service.tokenize(doc.get("text", ""))
+        doc_tokens.append(tokens)
+        total_len += len(tokens)
+        for token in set(tokens):
+            doc_freq[token] += 1
+
+    total_docs = len(docs)
+    avg_len = total_len / total_docs if total_docs else 1
+    query_counter = Counter(query_tokens)
+    query_phrase = "".join(query_tokens)
+
+    scored = []
+    for doc, tokens in zip(docs, doc_tokens):
+        if not tokens:
+            continue
+        tf = Counter(tokens)
+        doc_len = len(tokens)
+        score = 0.0
+        matched_terms = 0
+        for token, query_weight in query_counter.items():
+            freq = tf.get(token, 0)
+            if not freq:
+                continue
+            matched_terms += 1
+            idf = math.log((total_docs - doc_freq[token] + 0.5) / (doc_freq[token] + 0.5) + 1)
+            numerator = freq * (_embedding_service.k1 + 1)
+            denominator = freq + _embedding_service.k1 * (
+                1 - _embedding_service.b + _embedding_service.b * doc_len / max(avg_len, 1)
+            )
+            score += query_weight * idf * numerator / denominator
+
+        text = doc.get("text", "")
+        compact_text = "".join(_embedding_service.tokenize(text))
+        if query_phrase and query_phrase in compact_text:
+            score += 8.0
+        if matched_terms >= max(1, min(3, len(query_counter))):
+            score += matched_terms * 0.25
+
+        if score <= 0:
+            continue
+        item = dict(doc)
+        item["score"] = float(score)
+        item["keyword_score"] = float(score)
+        scored.append(item)
+
+    scored.sort(key=lambda item: item.get("keyword_score", 0.0), reverse=True)
+    return scored[:top_n]
+
+
+def _keyword_fallback_retrieve(query: str, top_k: int, candidate_k: int, filter_expr: str, reason: str) -> Dict[str, Any]:
+    meta: Dict[str, Any] = {
+        "rerank_enabled": bool(RERANK_MODEL and RERANK_API_KEY and RERANK_BINDING_HOST),
+        "rerank_applied": False,
+        "rerank_model": RERANK_MODEL,
+        "rerank_endpoint": _get_rerank_endpoint(),
+        "rerank_error": None,
+        "retrieval_mode": "keyword_fallback",
+        "retrieval_error": reason,
+        "candidate_k": candidate_k,
+        "leaf_retrieve_level": LEAF_RETRIEVE_LEVEL,
+        "candidate_count": 0,
+    }
+    try:
+        docs = _milvus_manager.query(
+            filter_expr=filter_expr,
+            output_fields=_retrieval_output_fields(),
+            limit=KEYWORD_FALLBACK_SCAN_LIMIT,
+        )
+        candidates = _score_keyword_candidates(query, list(docs), candidate_k)
+        meta["candidate_count"] = len(candidates)
+        reranked, rerank_meta = _rerank_documents(query=query, docs=candidates, top_k=top_k)
+        merged_docs, merge_meta = _auto_merge_documents(docs=reranked, top_k=top_k)
+        merged_docs = attach_images_to_docs(merged_docs, query=query)
+        meta.update(rerank_meta)
+        meta["retrieval_mode"] = "keyword_fallback"
+        meta["retrieval_error"] = reason
+        meta["candidate_k"] = candidate_k
+        meta["leaf_retrieve_level"] = LEAF_RETRIEVE_LEVEL
+        meta.update(merge_meta)
+        meta["retrieved_images"] = images_from_retrieved_docs(merged_docs, query=query)
+        return {"docs": merged_docs, "meta": meta}
+    except Exception as fallback_error:
+        meta.update({
+            "rerank_applied": False,
+            "rerank_error": "keyword_fallback_failed",
+            "retrieval_mode": "failed",
+            "retrieval_error": f"{reason}; keyword_fallback_error={fallback_error}",
+            "auto_merge_enabled": AUTO_MERGE_ENABLED,
+            "auto_merge_applied": False,
+            "auto_merge_threshold": AUTO_MERGE_THRESHOLD,
+            "auto_merge_replaced_chunks": 0,
+            "auto_merge_steps": 0,
+            "candidate_count": 0,
+            "retrieved_images": [],
+        })
+        return {"docs": [], "meta": meta}
 
 
 def _merge_to_parent_level(docs: List[dict], threshold: int = 2) -> Tuple[List[dict], int]:
@@ -245,8 +374,9 @@ def step_back_expand(query: str) -> dict:
 
 
 def retrieve_documents(query: str, top_k: int = 5) -> Dict[str, Any]:
-    candidate_k = max(top_k * 3, top_k)
+    candidate_k = max(top_k * CANDIDATE_MULTIPLIER, top_k)
     filter_expr = f"chunk_level == {LEAF_RETRIEVE_LEVEL}"
+    dense_embedding = None
     try:
         dense_embeddings = _embedding_service.get_embeddings([query])
         dense_embedding = dense_embeddings[0]
@@ -258,50 +388,57 @@ def retrieve_documents(query: str, top_k: int = 5) -> Dict[str, Any]:
             top_k=candidate_k,
             filter_expr=filter_expr,
         )
+        if not retrieved:
+            return _keyword_fallback_retrieve(
+                query=query,
+                top_k=top_k,
+                candidate_k=candidate_k,
+                filter_expr=filter_expr,
+                reason="hybrid_empty",
+            )
         reranked, rerank_meta = _rerank_documents(query=query, docs=retrieved, top_k=top_k)
         merged_docs, merge_meta = _auto_merge_documents(docs=reranked, top_k=top_k)
         merged_docs = attach_images_to_docs(merged_docs, query=query)
         rerank_meta["retrieval_mode"] = "hybrid"
+        rerank_meta["retrieval_error"] = None
         rerank_meta["candidate_k"] = candidate_k
         rerank_meta["leaf_retrieve_level"] = LEAF_RETRIEVE_LEVEL
         rerank_meta.update(merge_meta)
         rerank_meta["retrieved_images"] = images_from_retrieved_docs(merged_docs, query=query)
         return {"docs": merged_docs, "meta": rerank_meta}
-    except Exception:
+    except Exception as hybrid_error:
         try:
-            dense_embeddings = _embedding_service.get_embeddings([query])
-            dense_embedding = dense_embeddings[0]
+            if dense_embedding is None:
+                dense_embeddings = _embedding_service.get_embeddings([query])
+                dense_embedding = dense_embeddings[0]
             retrieved = _milvus_manager.dense_retrieve(
                 dense_embedding=dense_embedding,
                 top_k=candidate_k,
                 filter_expr=filter_expr,
             )
+            if not retrieved:
+                return _keyword_fallback_retrieve(
+                    query=query,
+                    top_k=top_k,
+                    candidate_k=candidate_k,
+                    filter_expr=filter_expr,
+                    reason=f"hybrid_error={hybrid_error}; dense_empty",
+                )
             reranked, rerank_meta = _rerank_documents(query=query, docs=retrieved, top_k=top_k)
             merged_docs, merge_meta = _auto_merge_documents(docs=reranked, top_k=top_k)
             merged_docs = attach_images_to_docs(merged_docs, query=query)
             rerank_meta["retrieval_mode"] = "dense_fallback"
+            rerank_meta["retrieval_error"] = str(hybrid_error)
             rerank_meta["candidate_k"] = candidate_k
             rerank_meta["leaf_retrieve_level"] = LEAF_RETRIEVE_LEVEL
             rerank_meta.update(merge_meta)
             rerank_meta["retrieved_images"] = images_from_retrieved_docs(merged_docs, query=query)
             return {"docs": merged_docs, "meta": rerank_meta}
-        except Exception:
-            return {
-                "docs": [],
-                "meta": {
-                    "rerank_enabled": bool(RERANK_MODEL and RERANK_API_KEY and RERANK_BINDING_HOST),
-                    "rerank_applied": False,
-                    "rerank_model": RERANK_MODEL,
-                    "rerank_endpoint": _get_rerank_endpoint(),
-                    "rerank_error": "retrieve_failed",
-                    "retrieval_mode": "failed",
-                    "candidate_k": candidate_k,
-                    "leaf_retrieve_level": LEAF_RETRIEVE_LEVEL,
-                    "auto_merge_enabled": AUTO_MERGE_ENABLED,
-                    "auto_merge_applied": False,
-                    "auto_merge_threshold": AUTO_MERGE_THRESHOLD,
-                    "auto_merge_replaced_chunks": 0,
-                    "auto_merge_steps": 0,
-                    "candidate_count": 0,
-                },
-            }
+        except Exception as dense_error:
+            return _keyword_fallback_retrieve(
+                query=query,
+                top_k=top_k,
+                candidate_k=candidate_k,
+                filter_expr=filter_expr,
+                reason=f"hybrid_error={hybrid_error}; dense_error={dense_error}",
+            )

@@ -1,10 +1,10 @@
 """父级分块文档存储（用于 Auto-merging Retriever）"""
-from datetime import datetime
 from typing import List
 
 from cache import cache
 from database import SessionLocal
 from models import ParentChunk
+from time_utils import utc_now
 
 
 class ParentChunkStore:
@@ -53,7 +53,7 @@ class ParentChunkStore:
                     "root_chunk_id": doc.get("root_chunk_id", ""),
                     "chunk_level": int(doc.get("chunk_level", 0) or 0),
                     "chunk_idx": int(doc.get("chunk_idx", 0) or 0),
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": utc_now(),
                 }
                 cache_payload = {
                     "chunk_id": chunk_id,

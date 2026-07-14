@@ -1,5 +1,5 @@
 [project]
-name = "SuperMew"
+name = "SuperService"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -31,6 +31,8 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "python-jose[cryptography]>=3.3.0",
     "pillow>=12.1.1",
+    "dashscope>=1.20.10",
+    "superpowers>=0.1.2",
 ]
 
 [project.optional-dependencies]
