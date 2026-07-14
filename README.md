@@ -1,4 +1,4 @@
-# SuperMew / SuperService RAG Agent
+# SuperService RAG Agent
 
 这是一个基于 FastAPI、LangChain、LangGraph 和 Milvus 开发的 AI 智能客服与 RAG 知识库项目。
 
@@ -353,19 +353,31 @@ docker compose down
 
 ## 项目截图
 
-### 首页
+### 登录界面
 
-![首页](uploads/%E9%A6%96%E9%A1%B5.png)
+![输入图片说明](image.png)
 
-### 天气查询
+### 管理员界面
 
-![天气查询](uploads/%E5%A4%A9%E6%B0%94.png)
+![输入图片说明](guanliyuan.png)
 
-### 知识库检索过程
+### 用户界面
+![输入图片说明](yonghu.png)
 
-![知识库检索过程 1](uploads/image.png)
+### 管理员功能
+![输入图片说明](gongneng1.png)
+![输入图片说明](gongneng2.png)
+![输入图片说明](gongneng3.png)
 
-![知识库检索过程 2](uploads/%E6%A3%80%E7%B4%A2.png)
+### 知识库检索
+![输入图片说明](zhishiku.png)
+![输入图片说明](%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2.png)
+
+### 商品库检索
+![输入图片说明](%E5%95%86%E5%93%81%E6%A3%80%E7%B4%A2.png)
+
+
+
 
 ## 后续可以继续扩展
 
