@@ -5,6 +5,26 @@
 项目实现了完整的用户端和管理员端：普通用户可以与 AI 流式聊天、查询知识库、转接人工客服；管理员可以管理知识库、商品、用户和客服会话。系统还集成了天气、物流、语音和图片理解等能力，适合用于学习 RAG、Agent、向量数据库和 AI 客服系统的完整开发流程。
 
 ## 项目效果
+登录界面
+![输入图片说明](image.png)
+
+管理员界面
+![输入图片说明](guanliyuan.png)
+
+用户界面
+![输入图片说明](yonghu.png)
+
+管理员功能
+![输入图片说明](gongneng1.png)
+![输入图片说明](gongneng2.png)
+![输入图片说明](gongneng3.png)
+
+知识库检索
+![输入图片说明](zhishiku.png)
+![输入图片说明](%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2.png)
+
+商品库检索
+![输入图片说明](%E5%95%86%E5%93%81%E6%A3%80%E7%B4%A2.png)
 
 ### 用户端
 
@@ -351,33 +371,6 @@ docker compose down
 
 数据库文件默认保存在 `volumes/`，普通的 `docker compose down` 不会删除这些数据。
 
-## 项目截图
-
-### 登录界面
-
-![输入图片说明](image.png)
-
-### 管理员界面
-
-![输入图片说明](guanliyuan.png)
-
-### 用户界面
-![输入图片说明](yonghu.png)
-
-### 管理员功能
-![输入图片说明](gongneng1.png)
-![输入图片说明](gongneng2.png)
-![输入图片说明](gongneng3.png)
-
-### 知识库检索
-![输入图片说明](zhishiku.png)
-![输入图片说明](%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2.png)
-
-### 商品库检索
-![输入图片说明](%E5%95%86%E5%93%81%E6%A3%80%E7%B4%A2.png)
-
-
-
 
 ## 后续可以继续扩展
 
@@ -388,4 +381,3 @@ docker compose down
 - 增加商品推荐、订单查询和售后处理工具。
 - 将文档解析和向量入库改为异步任务。
 
-商城接入思路可以参考 [docs/deployment-and-shop-integration.md](docs/deployment-and-shop-integration.md)。
