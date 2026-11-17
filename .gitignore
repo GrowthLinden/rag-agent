@@ -23,6 +23,10 @@ data/
 # local study / scratch
 langchain-study/
 
+# Local browser verification artifacts
+.playwright-cli/
+output/playwright/
+
 # personal local files
 resume_text.txt
 agentJD岗位职责.txt

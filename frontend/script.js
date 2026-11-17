@@ -6,6 +6,41 @@ const configuredWsBaseUrl = (window.SUPERMEW_WS_BASE_URL || '').trim().replace(/
 const API_BASE_URL = configuredApiBaseUrl || (location.protocol === 'file:' || !location.host ? DEFAULT_API_BASE_URL : '');
 const API_ORIGIN_LABEL = API_BASE_URL || (location.origin && location.origin !== 'null' ? location.origin : DEFAULT_API_BASE_URL);
 const AUTH_TOKEN_KEY = 'accessToken';
+const LAYOUT_STORAGE_KEY = 'supermew.layout.v1';
+const PANEL_SIZES = {
+    sidebar: { min: 176, max: 320, initial: 208, compact: 64 },
+    queue: { min: 224, max: 440, initial: 272 },
+    mobile: 680,
+    compact: 960,
+    workspaceInsets: 34, // 工作台两侧各 16px 外边距，加上 2px 边框。
+    minChat: 360
+};
+
+function clampPanelWidth(value, min, max, fallback) {
+    return typeof value === 'number' && Number.isFinite(value)
+        ? Math.round(Math.min(max, Math.max(min, value)))
+        : fallback;
+}
+
+function readLayoutPreferences() {
+    let saved;
+    try {
+        saved = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY)) || {};
+    } catch (_) {
+        saved = {};
+    }
+    return {
+        sidebarWidth: clampPanelWidth(saved.sidebarWidth, PANEL_SIZES.sidebar.min, PANEL_SIZES.sidebar.max, PANEL_SIZES.sidebar.initial),
+        queueWidth: clampPanelWidth(saved.queueWidth, PANEL_SIZES.queue.min, PANEL_SIZES.queue.max, PANEL_SIZES.queue.initial),
+        sidebarCollapsed: saved.sidebarCollapsed === true,
+        queueCollapsed: saved.queueCollapsed === true
+    };
+}
+
+function resizeComposer(field) {
+    field.style.height = '0px';
+    field.style.height = `${field.scrollHeight}px`;
+}
 
 function normalizePath(path) {
     return path.startsWith('/') ? path : `/${path}`;
@@ -52,12 +87,101 @@ function sanitizeRenderedMarkdown(html) {
 }
 
 createApp({
+    components: {
+        UiIcon: {
+            props: { name: { type: String, required: true } },
+            template: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use :href="\'icons.svg#\' + name"></use></svg>'
+        },
+        UiResizeHandle: {
+            props: {
+                label: String,
+                controls: String,
+                value: Number,
+                min: Number,
+                max: Number,
+                initial: Number
+            },
+            emits: ['resize', 'commit'],
+            data() {
+                return { pointerId: null, startX: 0, startValue: 0 };
+            },
+            methods: {
+                setWidth(value) {
+                    this.$emit('resize', clampPanelWidth(value, this.min, this.max, this.initial));
+                },
+                start(event) {
+                    if (event.button !== 0 || this.pointerId !== null) return;
+                    this.pointerId = event.pointerId;
+                    this.startX = event.clientX;
+                    this.startValue = this.value;
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                },
+                move(event) {
+                    if (event.pointerId === this.pointerId) {
+                        this.setWidth(this.startValue + event.clientX - this.startX);
+                    }
+                },
+                finish(event) {
+                    if (event.pointerId !== this.pointerId) return;
+                    this.pointerId = null;
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                    }
+                    this.$emit('commit');
+                },
+                keydown(event) {
+                    const step = event.shiftKey ? 32 : 8;
+                    const values = { ArrowLeft: this.value - step, ArrowRight: this.value + step, Home: this.min, End: this.max };
+                    if (!Object.hasOwn(values, event.key)) return;
+                    event.preventDefault();
+                    this.setWidth(values[event.key]);
+                    this.$emit('commit');
+                },
+                reset() {
+                    this.setWidth(this.initial);
+                    this.$emit('commit');
+                }
+            },
+            template: `<div class="resize-handle" :class="{resizing: pointerId !== null}" role="separator" tabindex="0"
+                aria-orientation="vertical" :aria-label="label" :aria-controls="controls"
+                :aria-valuemin="min" :aria-valuemax="max" :aria-valuenow="value" :aria-valuetext="value + ' 像素'"
+                :title="label + '（左右方向键调整，双击还原）'"
+                @pointerdown.prevent="start" @pointermove="move" @pointerup="finish" @pointercancel="finish"
+                @lostpointercapture="finish" @keydown="keydown" @dblclick="reset"></div>`
+        }
+    },
+    directives: {
+        autosize: {
+            mounted(field) {
+                resizeComposer(field);
+                // 面板拖动会改变自动换行，只在宽度变化时重新计算，避免流式消息触发反复测量。
+                let previousWidth = field.clientWidth;
+                field._composerObserver = new ResizeObserver(() => {
+                    if (field.clientWidth !== previousWidth) {
+                        previousWidth = field.clientWidth;
+                        resizeComposer(field);
+                    }
+                });
+                field._composerObserver.observe(field);
+            },
+            updated(field, binding) {
+                if (binding.value !== binding.oldValue) resizeComposer(field);
+            },
+            unmounted(field) {
+                field._composerObserver.disconnect();
+            }
+        }
+    },
     data() {
         return {
+            layout: readLayoutPreferences(),
+            viewportWidth: document.documentElement.getBoundingClientRect().width,
+            panelSizes: PANEL_SIZES,
             token: sessionStorage.getItem(AUTH_TOKEN_KEY) || '',
             currentUser: null,
             authMode: 'login',
             authLoading: false,
+            authError: '',
             authForm: { username: '', password: '' },
             activeView: 'chat',
 
@@ -118,6 +242,27 @@ createApp({
         };
     },
     computed: {
+        compactNavigation() {
+            return this.viewportWidth < PANEL_SIZES.compact || this.layout.sidebarCollapsed;
+        },
+        sidebarWidth() {
+            return this.compactNavigation ? PANEL_SIZES.sidebar.compact : this.layout.sidebarWidth;
+        },
+        queueMaxWidth() {
+            // 收窄视口时保留聊天所需空间；用户保存的宽度不被临时视口覆盖。
+            const minChat = this.viewportWidth < PANEL_SIZES.compact ? 320 : PANEL_SIZES.minChat;
+            return Math.max(PANEL_SIZES.queue.min, Math.min(PANEL_SIZES.queue.max,
+                this.viewportWidth - this.sidebarWidth - PANEL_SIZES.workspaceInsets - minChat));
+        },
+        queueWidth() {
+            return Math.min(this.layout.queueWidth, this.queueMaxWidth);
+        },
+        queueCollapsed() {
+            return this.viewportWidth >= PANEL_SIZES.mobile && this.layout.queueCollapsed;
+        },
+        layoutStyle() {
+            return { '--sidebar': `${this.sidebarWidth}px`, '--queue-width': `${this.queueWidth}px` };
+        },
         isAuthenticated() {
             return !!this.token && !!this.currentUser;
         },
@@ -134,6 +279,7 @@ createApp({
         }
     },
     async mounted() {
+        window.addEventListener('resize', this.updateViewportWidth);
         localStorage.removeItem(AUTH_TOKEN_KEY);
         localStorage.setItem('customerSessionId', this.sessionId);
         if (this.token) {
@@ -145,7 +291,47 @@ createApp({
             }
         }
     },
+    beforeUnmount() {
+        window.removeEventListener('resize', this.updateViewportWidth);
+    },
     methods: {
+        updateViewportWidth() {
+            // 浏览器缩放后视口可能是小数，不能用取整的 innerWidth 判断布局断点。
+            this.viewportWidth = document.documentElement.getBoundingClientRect().width;
+        },
+        saveLayout() {
+            try {
+                localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(this.layout));
+            } catch (_) {
+                // 隐私模式或存储配额不足时，布局仍在当前页面生效。
+            }
+        },
+        resizePanel(panel, width) {
+            const sizes = PANEL_SIZES[panel];
+            const max = panel === 'queue' ? this.queueMaxWidth : sizes.max;
+            this.layout[`${panel}Width`] = clampPanelWidth(width, sizes.min, max, sizes.initial);
+        },
+        toggleSidebar() {
+            this.layout.sidebarCollapsed = !this.layout.sidebarCollapsed;
+            this.saveLayout();
+        },
+        toggleQueue() {
+            this.layout.queueCollapsed = !this.layout.queueCollapsed;
+            this.saveLayout();
+            this.focusField(this.layout.queueCollapsed ? 'queue-toggle' : 'conversation-filter');
+        },
+        focusField(id) {
+            this.$nextTick(() => {
+                const field = document.getElementById(id);
+                if (!field) return;
+                field.focus({ preventScroll: true });
+                field.scrollIntoView({ block: 'nearest' });
+            });
+        },
+        backToQueue() {
+            this.selectedConversation = null;
+            this.focusField('conversation-filter');
+        },
         parseMarkdown(text) {
             const normalized = (text || '').replace(
                 /(!?\[[^\]]*\]\()((?:\/assets\/|assets\/)[^)]+)(\))/g,
@@ -413,10 +599,12 @@ createApp({
             this.enforceRoleView();
         },
         async handleAuthSubmit() {
+            if (this.authLoading) return;
+            this.authError = '';
             const username = this.authForm.username.trim();
             const password = this.authForm.password.trim();
             if (!username || !password) {
-                alert('请输入用户名和密码');
+                this.authError = '请输入用户名和密码';
                 return;
             }
 
@@ -437,7 +625,7 @@ createApp({
                 this.authForm.password = '';
                 this.afterLogin();
             } catch (error) {
-                alert(error.message);
+                this.authError = error.message;
             } finally {
                 this.authLoading = false;
             }
@@ -481,6 +669,7 @@ createApp({
             }
         },
         handleLogout() {
+            this.authError = '';
             this.token = '';
             this.currentUser = null;
             this.messages = [];
@@ -619,6 +808,8 @@ createApp({
             this.reconnectCustomerWs();
         },
         handleUserKeydown(event) {
+            // 输入法确认候选词时不发送消息，保留 Enter 发送和 Shift+Enter 换行。
+            if (event.isComposing) return;
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 this.sendUserMessage();
@@ -908,6 +1099,7 @@ createApp({
             await this.openConversation(data.conversation);
         },
         handleAdminKeydown(event) {
+            if (event.isComposing) return;
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 this.sendAdminReply();
@@ -994,6 +1186,7 @@ createApp({
                 password: '',
                 role: user.role || 'user'
             };
+            this.focusField('user-name');
         },
         async saveUser() {
             if (!this.isAdmin) return;
@@ -1089,6 +1282,7 @@ createApp({
             this.selectedProductImage = null;
             this.productNotice = '';
             if (this.$refs.productImageInput) this.$refs.productImageInput.value = '';
+            this.focusField('product-name');
         },
         handleProductImageSelect(event) {
             this.selectedProductImage = event.target.files?.[0] || null;

@@ -1,657 +1,2180 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperService AI 客服</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
-    <style>[v-cloak]{display:none!important}</style>
-</head>
-
-<body>
-    <div id="app" class="app-shell" v-cloak>
-        <aside class="sidebar">
-            <div class="brand">
-                <div class="brand-mark">AI</div>
-                <div>
-                    <strong>SuperService</strong>
-                    <span>AI 客服中心</span>
-                </div>
-            </div>
-
-            <template v-if="isAuthenticated">
-                <button v-if="!isAdmin" :class="['nav-btn', {active: activeView === 'chat'}]" @click="activeView = 'chat'">
-                    <i class="fas fa-comments"></i><span>联系客服</span>
-                </button>
-                <button v-if="isAdmin" :class="['nav-btn', {active: activeView === 'workspace'}]" @click="activeView = 'workspace'; loadAdminConversations()">
-                    <i class="fas fa-headset"></i><span>客服工作台</span>
-                </button>
-                <button v-if="isAdmin" :class="['nav-btn', {active: activeView === 'users'}]" @click="activeView = 'users'; loadUsers()">
-                    <i class="fas fa-users"></i><span>用户管理</span>
-                </button>
-                <button v-if="isAdmin" :class="['nav-btn', {active: activeView === 'products'}]" @click="activeView = 'products'; loadProducts()">
-                    <i class="fas fa-box-open"></i><span>商品库</span>
-                </button>
-                <button v-if="isAdmin" :class="['nav-btn', {active: activeView === 'knowledge'}]" @click="activeView = 'knowledge'; refreshKnowledge()">
-                    <i class="fas fa-folder-open"></i><span>知识库</span>
-                </button>
-            </template>
-
-            <div class="sidebar-spacer"></div>
-
-            <div v-if="isAuthenticated" class="profile">
-                <div class="avatar">{{ (currentUser.username || 'U').slice(0, 1).toUpperCase() }}</div>
-                <div>
-                    <strong>{{ currentUser.username }}</strong>
-                    <span>{{ isAdmin ? '管理员' : '用户' }}</span>
-                </div>
-            </div>
-            <button v-if="isAuthenticated" class="nav-btn muted" @click="handleLogout">
-                <i class="fas fa-right-from-bracket"></i><span>退出登录</span>
-            </button>
-        </aside>
-
-        <main class="main">
-            <section v-if="!isAuthenticated" class="auth-view">
-                <div class="auth-panel">
-                    <div>
-                        <p class="eyebrow">SuperService Support</p>
-                        <h1>{{ authMode === 'login' ? '登录客服系统' : '创建账号' }}</h1>
-                        <p class="muted-text">用户登录后由 AI 客服优先接待，明确转人工后进入管理员工作台。</p>
-                    </div>
-                    <div class="form-stack">
-                        <input v-model="authForm.username" type="text" placeholder="用户名">
-                        <input v-model="authForm.password" type="password" placeholder="密码">
-                        <button class="primary-btn" :disabled="authLoading" @click="handleAuthSubmit">
-                            {{ authLoading ? '提交中...' : (authMode === 'login' ? '登录' : '注册') }}
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+        />
+        <meta name="theme-color" content="#ffffff" />
+        <title>SuperService · 客服中心</title>
+        <link rel="icon" href="brand.svg" type="image/svg+xml" />
+        <link rel="stylesheet" href="style.css" />
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+    </head>
+    <body>
+        <div id="app" v-cloak>
+            <!-- Vue 挂载节点的属性不会参与模板编译，动态布局类放在子容器。 -->
+            <div
+                :class="['app-shell', { 'auth-shell': !isAuthenticated, 'nav-compact': compactNavigation }]"
+                :style="layoutStyle"
+            >
+                <a
+                    v-if="isAuthenticated"
+                    class="skip-link"
+                    href="#main-content"
+                >
+                    跳到主要内容
+                </a>
+                <aside
+                    v-if="isAuthenticated"
+                    id="workspace-navigation"
+                    class="sidebar"
+                    aria-label="工作空间"
+                >
+                    <a
+                        class="brand"
+                        href="#main-content"
+                        aria-label="SuperService 客服中心"
+                    >
+                        <img src="brand.svg" width="36" height="36" alt="" />
+                        <strong>SuperService</strong>
+                    </a>
+                    <nav class="main-nav" aria-label="主导航">
+                        <button
+                            v-if="!isAdmin"
+                            :class="['nav-btn', {active: activeView === 'chat'}]"
+                            aria-label="在线客服"
+                            title="在线客服"
+                            :aria-current="activeView === 'chat' ? 'page' : null"
+                            @click="activeView = 'chat'"
+                        >
+                            <ui-icon name="comments"></ui-icon>
+                            <span>在线客服</span>
                         </button>
-                        <button class="link-btn" @click="authMode = authMode === 'login' ? 'register' : 'login'">
-                            {{ authMode === 'login' ? '没有账号？去注册' : '已有账号？去登录' }}
+                        <template v-else>
+                            <button
+                                :class="['nav-btn', {active: activeView === 'workspace'}]"
+                                aria-label="客服工作台"
+                                title="客服工作台"
+                                :aria-current="activeView === 'workspace' ? 'page' : null"
+                                @click="activeView = 'workspace'; loadAdminConversations()"
+                            >
+                                <ui-icon name="headset"></ui-icon>
+                                <span>客服工作台</span>
+                                <em
+                                    v-if="adminHandoffRequestCount"
+                                    class="nav-count"
+                                    aria-label="待接入会话数"
+                                >
+                                    {{ adminHandoffRequestCount }}
+                                </em>
+                            </button>
+                            <button
+                                :class="['nav-btn', {active: activeView === 'users'}]"
+                                aria-label="用户管理"
+                                title="用户管理"
+                                :aria-current="activeView === 'users' ? 'page' : null"
+                                @click="activeView = 'users'; loadUsers()"
+                            >
+                                <ui-icon name="users"></ui-icon>
+                                <span>用户管理</span>
+                            </button>
+                            <button
+                                :class="['nav-btn', {active: activeView === 'products'}]"
+                                aria-label="商品库"
+                                title="商品库"
+                                :aria-current="activeView === 'products' ? 'page' : null"
+                                @click="activeView = 'products'; loadProducts()"
+                            >
+                                <ui-icon name="box-open"></ui-icon>
+                                <span>商品库</span>
+                            </button>
+                            <button
+                                :class="['nav-btn', {active: activeView === 'knowledge'}]"
+                                aria-label="知识库"
+                                title="知识库"
+                                :aria-current="activeView === 'knowledge' ? 'page' : null"
+                                @click="activeView = 'knowledge'; refreshKnowledge()"
+                            >
+                                <ui-icon name="folder-open"></ui-icon>
+                                <span>知识库</span>
+                            </button>
+                        </template>
+                    </nav>
+                    <div class="sidebar-account">
+                        <button
+                            class="icon-btn sidebar-toggle"
+                            :aria-label="layout.sidebarCollapsed ? '展开导航栏' : '收起导航栏'"
+                            :title="layout.sidebarCollapsed ? '展开导航栏' : '收起导航栏'"
+                            :aria-expanded="!layout.sidebarCollapsed"
+                            aria-controls="workspace-navigation"
+                            @click="toggleSidebar"
+                        >
+                            <ui-icon
+                                :name="layout.sidebarCollapsed ? 'panel-open' : 'panel-close'"
+                            ></ui-icon>
                         </button>
-                    </div>
-                </div>
-            </section>
-
-            <section v-else-if="!isAdmin && activeView === 'chat'" class="chat-view">
-                <header class="topbar">
-                    <div>
-                        <p class="eyebrow">Customer Chat</p>
-                        <h2>在线客服</h2>
-                    </div>
-                    <div class="topbar-actions">
-                        <button class="secondary-btn" @click="startNewSession">
-                            <i class="fas fa-plus"></i><span>新会话</span>
-                        </button>
-                        <button class="secondary-btn" @click="showUserHistory = !showUserHistory; loadSessions()">
-                            <i class="fas fa-clock-rotate-left"></i><span>历史会话</span>
-                        </button>
-                        <button v-if="messages.length && sessionStatus !== 'closed'" class="secondary-btn" :disabled="isLoading" @click="closeUserSession">
-                            <i class="fas fa-circle-check"></i><span>关闭会话</span>
-                        </button>
-                        <div class="status-pill" :class="sessionStatus">
-                            {{ statusText(sessionStatus) }}
-                        </div>
-                    </div>
-                </header>
-
-                <div class="customer-chat-grid" :class="{ 'with-history': showUserHistory }">
-                    <aside v-if="showUserHistory" class="user-history-panel">
-                        <div class="history-title">
-                            <strong>历史会话</strong>
-                            <button class="icon-btn" @click="showUserHistory = false">
-                                <i class="fas fa-xmark"></i>
+                        <div class="profile">
+                            <div class="avatar">
+                                {{ (currentUser.username || 'U').slice(0,
+                                1).toUpperCase() }}
+                            </div>
+                            <div class="profile-name">
+                                <strong :title="currentUser.username">
+                                    {{ currentUser.username }}
+                                </strong>
+                                <span>{{ isAdmin ? '管理员' : '用户' }}</span>
+                            </div>
+                            <button
+                                class="icon-btn logout-btn"
+                                aria-label="退出登录"
+                                title="退出登录"
+                                @click="handleLogout"
+                            >
+                                <ui-icon name="right-from-bracket"></ui-icon>
                             </button>
                         </div>
-                        <button v-for="session in sessions" :key="session.session_id" :class="['history-item', {active: session.session_id === sessionId}]" @click="openUserSession(session.session_id)">
-                            <strong>{{ session.last_message_preview || session.session_id }}</strong>
-                            <span>{{ statusText(session.status) }} · {{ session.message_count }} 条消息</span>
-                            <time>{{ new Date(session.updated_at).toLocaleString() }}</time>
-                        </button>
-                        <div v-if="sessions.length === 0" class="history-empty">暂无历史会话</div>
-                    </aside>
-
-                <div class="messages" ref="chatContainer">
-                    <div v-if="messages.length === 0" class="empty-state">
-                        <h3>你好，我是 SuperService AI 客服</h3>
-                        <p>你可以直接描述问题。需要真人处理时，点击“转人工”或直接输入“转人工”。</p>
                     </div>
-                    <div v-for="message in messages" :key="message.localId || message.id" :class="['message-row', message.sender_type, {streaming: message.streaming}]">
-                            <div class="bubble">
-                                <div class="message-name">{{ senderName(message) }}</div>
-                                <div v-if="message.sender_type === 'ai' && message.content" v-html="parseMarkdown(message.content)"></div>
-                                <div v-else-if="message.sender_type !== 'ai'">{{ message.content }}</div>
-                                <div v-if="message.sender_type === 'ai' && hasLiveActivity(message)" class="ai-activity">
-                                    <div class="ai-activity-head">
-                                        <span class="typing-dots"><i></i><i></i><i></i></span>
-                                        <strong>{{ currentAiAction(message) }}</strong>
+                    <ui-resize-handle
+                        v-if="!compactNavigation"
+                        label="调整导航栏宽度"
+                        controls="workspace-navigation"
+                        :value="sidebarWidth"
+                        :min="panelSizes.sidebar.min"
+                        :max="panelSizes.sidebar.max"
+                        :initial="panelSizes.sidebar.initial"
+                        @resize="resizePanel('sidebar', $event)"
+                        @commit="saveLayout"
+                    ></ui-resize-handle>
+                </aside>
+
+                <main id="main-content" class="main" tabindex="-1">
+                    <section
+                        v-if="!isAuthenticated"
+                        class="auth-view"
+                        aria-labelledby="auth-title"
+                    >
+                        <div class="auth-form-area">
+                            <div class="auth-panel">
+                                <div class="auth-brand">
+                                    <img
+                                        src="brand.svg"
+                                        width="32"
+                                        height="32"
+                                        alt=""
+                                    />
+                                    <strong>SuperService</strong>
+                                </div>
+                                <h1 id="auth-title">
+                                    {{ authMode === 'login' ? '登录账号' :
+                                    '创建账号' }}
+                                </h1>
+                                <div
+                                    class="auth-tabs"
+                                    role="group"
+                                    aria-label="账号操作"
+                                >
+                                    <button
+                                        type="button"
+                                        :class="{active: authMode === 'login'}"
+                                        :aria-pressed="authMode === 'login'"
+                                        @click="authMode = 'login'; authError = ''"
+                                    >
+                                        登录
+                                    </button>
+                                    <button
+                                        type="button"
+                                        :class="{active: authMode === 'register'}"
+                                        :aria-pressed="authMode === 'register'"
+                                        @click="authMode = 'register'; authError = ''"
+                                    >
+                                        注册
+                                    </button>
+                                </div>
+                                <form
+                                    class="form-stack"
+                                    aria-labelledby="auth-title"
+                                    @submit.prevent="handleAuthSubmit"
+                                >
+                                    <div class="field">
+                                        <label for="auth-username">
+                                            用户名
+                                        </label>
+                                        <input
+                                            id="auth-username"
+                                            name="username"
+                                            v-model="authForm.username"
+                                            type="text"
+                                            autocomplete="username"
+                                            autocapitalize="none"
+                                            autocorrect="off"
+                                            spellcheck="false"
+                                            placeholder="输入用户名"
+                                            required
+                                        />
                                     </div>
-                                    <div v-if="activitySteps(message).length" class="ai-activity-steps">
-                                        <div v-for="(step, index) in activitySteps(message)" :key="index" class="ai-activity-step">
-                                            <span>{{ step.icon || '•' }}</span>
-                                            <div>
-                                                <strong>{{ step.label || '正在处理' }}</strong>
-                                                <em v-if="step.detail">{{ step.detail }}</em>
-                                            </div>
-                                        </div>
+                                    <div class="field">
+                                        <label for="auth-password">密码</label>
+                                        <input
+                                            id="auth-password"
+                                            name="password"
+                                            v-model="authForm.password"
+                                            type="password"
+                                            :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'"
+                                            placeholder="输入密码"
+                                            required
+                                        />
+                                    </div>
+                                    <p
+                                        v-if="authError"
+                                        class="notice error-notice"
+                                        role="alert"
+                                    >
+                                        {{ authError }}
+                                    </p>
+                                    <button
+                                        class="primary-btn auth-submit"
+                                        type="submit"
+                                        :disabled="authLoading"
+                                    >
+                                        <span>
+                                            {{ authLoading ? '提交中…' :
+                                            (authMode === 'login' ? '登录' :
+                                            '注册') }}
+                                        </span>
+                                        <ui-icon
+                                            :name="authLoading ? 'loader' : 'arrow-right'"
+                                            :class="{spinning: authLoading}"
+                                        ></ui-icon>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section
+                        v-else-if="!isAdmin && activeView === 'chat'"
+                        class="chat-view"
+                        aria-labelledby="chat-title"
+                    >
+                        <header class="topbar">
+                            <div class="page-heading">
+                                <h1 id="chat-title">在线客服</h1>
+                                <span
+                                    class="status-pill"
+                                    :class="sessionStatus"
+                                >
+                                    {{ statusText(sessionStatus) }}
+                                </span>
+                            </div>
+                            <div class="topbar-actions">
+                                <button
+                                    class="secondary-btn"
+                                    @click="showUserHistory = !showUserHistory; loadSessions()"
+                                    :aria-expanded="showUserHistory"
+                                    aria-controls="user-history"
+                                >
+                                    <ui-icon name="clock-rotate-left"></ui-icon>
+                                    <span>历史会话</span>
+                                </button>
+                                <button
+                                    v-if="messages.length && sessionStatus !== 'closed'"
+                                    class="secondary-btn"
+                                    :disabled="isLoading"
+                                    @click="closeUserSession"
+                                >
+                                    <ui-icon name="circle-check"></ui-icon>
+                                    <span>结束会话</span>
+                                </button>
+                                <button
+                                    class="primary-btn"
+                                    @click="startNewSession"
+                                >
+                                    <ui-icon name="plus"></ui-icon>
+                                    <span>新会话</span>
+                                </button>
+                            </div>
+                        </header>
+                        <div
+                            class="customer-chat-grid"
+                            :class="{ 'with-history': showUserHistory }"
+                        >
+                            <aside
+                                v-if="showUserHistory"
+                                id="user-history"
+                                class="user-history-panel"
+                                aria-label="历史会话"
+                            >
+                                <div class="history-title">
+                                    <h2>历史会话</h2>
+                                    <button
+                                        class="icon-btn"
+                                        aria-label="收起历史会话"
+                                        @click="showUserHistory = false"
+                                    >
+                                        <ui-icon name="xmark"></ui-icon>
+                                    </button>
+                                </div>
+                                <div class="history-list">
+                                    <button
+                                        v-for="session in sessions"
+                                        :key="session.session_id"
+                                        :class="['history-item', {active: session.session_id === sessionId}]"
+                                        :aria-pressed="session.session_id === sessionId"
+                                        @click="openUserSession(session.session_id)"
+                                    >
+                                        <strong>
+                                            {{ session.last_message_preview ||
+                                            '新会话' }}
+                                        </strong>
+                                        <span>
+                                            {{ statusText(session.status) }} ·
+                                            {{ session.message_count }} 条消息
+                                        </span>
+                                        <time>
+                                            {{ new
+                                            Date(session.updated_at).toLocaleString()
+                                            }}
+                                        </time>
+                                    </button>
+                                    <div
+                                        v-if="sessions.length === 0"
+                                        class="history-empty"
+                                    >
+                                        暂无历史会话
                                     </div>
                                 </div>
-                                <div v-if="messageImages(message).length" class="message-images">
-                                    <figure v-for="(image, index) in messageImages(message)" :key="image.url + index" class="message-image-card">
-                                        <a :href="assetUrl(image.url)" target="_blank" rel="noopener">
-                                            <img :src="assetUrl(image.url)" :alt="imageAlt(image)">
-                                        </a>
-                                        <figcaption>
-                                            <strong>{{ image.caption || image.filename || 'PDF 图片' }}</strong>
-                                            <span>{{ imageMeta(image) }}</span>
-                                        </figcaption>
-                                    </figure>
-                                </div>
-                                <details v-if="hasRagDetails(message)" class="rag-trace" :open="message.streaming">
-                                    <summary>
-                                        <span>检索全流程</span>
-                                        <em v-if="ragTraceStatus(message)">{{ ragTraceStatus(message) }}</em>
-                                    </summary>
-
-                                    <div v-if="message.rag_steps && message.rag_steps.length" class="rag-steps">
-                                        <div v-for="(step, index) in message.rag_steps" :key="index" class="rag-step">
-                                            <span>{{ step.icon || '•' }}</span>
-                                            <strong>{{ step.label }}</strong>
-                                            <em v-if="step.detail">{{ step.detail }}</em>
+                            </aside>
+                            <div class="customer-chat-surface">
+                                <div
+                                    class="messages"
+                                    ref="chatContainer"
+                                    role="region"
+                                    aria-label="客服消息"
+                                    tabindex="0"
+                                    :aria-busy="isLoading"
+                                >
+                                    <div
+                                        v-if="messages.length === 0"
+                                        class="empty-state chat-welcome"
+                                    >
+                                        <div class="empty-visual">
+                                            <ui-icon name="sparkles"></ui-icon>
                                         </div>
+                                        <h2>有什么可以帮你？</h2>
                                     </div>
-
-                                    <template v-if="message.rag_trace">
-                                        <div class="trace-pills">
-                                            <span v-if="message.rag_trace.retrieval_stage">阶段：{{ message.rag_trace.retrieval_stage }}</span>
-                                            <span v-if="message.rag_trace.retrieval_mode">模式：{{ message.rag_trace.retrieval_mode }}</span>
-                                            <span v-if="message.rag_trace.candidate_k">候选：{{ message.rag_trace.candidate_k }}</span>
-                                            <span>Rerank：{{ formatBool(message.rag_trace.rerank_applied) }}</span>
-                                            <span>Auto-merge：{{ formatBool(message.rag_trace.auto_merge_applied) }}</span>
+                                    <div
+                                        v-for="message in messages"
+                                        :key="message.localId || message.id"
+                                        :class="['message-row', message.sender_type, {streaming: message.streaming}]"
+                                    >
+                                        <div
+                                            class="message-avatar"
+                                            aria-hidden="true"
+                                        >
+                                            <ui-icon
+                                                :name="message.sender_type === 'ai' ? 'sparkles' : (message.sender_type === 'admin' ? 'headset' : 'user')"
+                                            ></ui-icon>
                                         </div>
-                                        <div class="trace-fields">
-                                            <div v-if="message.rag_trace.query">
-                                                <strong>原始查询</strong>
-                                                <p>{{ message.rag_trace.query }}</p>
+                                        <div class="bubble">
+                                            <div class="message-name">
+                                                {{ senderName(message) }}
                                             </div>
-                                            <div v-if="message.rag_trace.expanded_query && message.rag_trace.expanded_query !== message.rag_trace.query">
-                                                <strong>扩展查询</strong>
-                                                <p>{{ message.rag_trace.expanded_query }}</p>
+                                            <div
+                                                v-if="message.sender_type === 'ai' && message.content"
+                                                v-html="parseMarkdown(message.content)"
+                                            ></div>
+                                            <div
+                                                v-else-if="message.sender_type !== 'ai'"
+                                            >
+                                                {{ message.content }}
                                             </div>
-                                            <div v-if="message.rag_trace.step_back_question">
-                                                <strong>退步问题</strong>
-                                                <p>{{ message.rag_trace.step_back_question }}</p>
-                                            </div>
-                                            <div v-if="message.rag_trace.step_back_answer">
-                                                <strong>退步答案</strong>
-                                                <p>{{ message.rag_trace.step_back_answer }}</p>
-                                            </div>
-                                            <div v-if="message.rag_trace.hypothetical_doc">
-                                                <strong>HyDE 文档</strong>
-                                                <p>{{ chunkPreview(message.rag_trace.hypothetical_doc) }}</p>
-                                            </div>
-                                        </div>
-                                        <div class="trace-chunks">
-                                            <strong>召回片段</strong>
-                                            <div v-if="traceChunks(message.rag_trace).length === 0" class="muted-text">本轮没有知识库召回片段</div>
-                                            <div v-for="(chunk, index) in traceChunks(message.rag_trace)" :key="index + (chunk.chunk_id || chunk.filename || '')" class="trace-chunk">
-                                                <div>
-                                                    <strong>#{{ index + 1 }} {{ chunk.filename || 'Unknown' }}</strong>
-                                                    <span>Page {{ displayPage(chunk.page_number) }} · L{{ chunk.chunk_level || '-' }} · score {{ formatScore(chunk.rerank_score ?? chunk.keyword_score ?? chunk.score) }}</span>
+                                            <div
+                                                v-if="message.sender_type === 'ai' && hasLiveActivity(message)"
+                                                class="ai-activity"
+                                            >
+                                                <div class="ai-activity-head">
+                                                    <span class="typing-dots">
+                                                        <i></i>
+                                                        <i></i>
+                                                        <i></i>
+                                                    </span>
+                                                    <strong>
+                                                        {{
+                                                        currentAiAction(message)
+                                                        }}
+                                                    </strong>
                                                 </div>
-                                                <p>{{ chunkPreview(chunk.text) }}</p>
-                                                <div v-if="visibleChunkImages(message, chunk).length" class="chunk-image-strip">
-                                                    <a v-for="(image, imageIndex) in visibleChunkImages(message, chunk)" :key="image.url + imageIndex" :href="assetUrl(image.url)" target="_blank" rel="noopener">
-                                                        <img :src="assetUrl(image.url)" :alt="imageAlt(image)">
+                                                <div
+                                                    v-if="activitySteps(message).length"
+                                                    class="ai-activity-steps"
+                                                >
+                                                    <div
+                                                        v-for="(step, index) in activitySteps(message)"
+                                                        :key="index"
+                                                        class="ai-activity-step"
+                                                    >
+                                                        <span>
+                                                            {{ step.icon || '•'
+                                                            }}
+                                                        </span>
+                                                        <div>
+                                                            <strong>
+                                                                {{ step.label ||
+                                                                '正在处理' }}
+                                                            </strong>
+                                                            <em
+                                                                v-if="step.detail"
+                                                            >
+                                                                {{ step.detail
+                                                                }}
+                                                            </em>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                v-if="messageImages(message).length"
+                                                class="message-images"
+                                            >
+                                                <figure
+                                                    v-for="(image, index) in messageImages(message)"
+                                                    :key="image.url + index"
+                                                    class="message-image-card"
+                                                >
+                                                    <a
+                                                        :href="assetUrl(image.url)"
+                                                        target="_blank"
+                                                        rel="noopener"
+                                                    >
+                                                        <img
+                                                            :src="assetUrl(image.url)"
+                                                            :alt="imageAlt(image)"
+                                                        />
                                                     </a>
+                                                    <figcaption>
+                                                        <strong>
+                                                            {{ image.caption ||
+                                                            image.filename ||
+                                                            'PDF 图片' }}
+                                                        </strong>
+                                                        <span>
+                                                            {{ imageMeta(image)
+                                                            }}
+                                                        </span>
+                                                    </figcaption>
+                                                </figure>
+                                            </div>
+                                            <details
+                                                v-if="hasRagDetails(message)"
+                                                class="rag-trace"
+                                                :open="message.streaming"
+                                            >
+                                                <summary>
+                                                    <span>检索全流程</span>
+                                                    <em
+                                                        v-if="ragTraceStatus(message)"
+                                                    >
+                                                        {{
+                                                        ragTraceStatus(message)
+                                                        }}
+                                                    </em>
+                                                </summary>
+
+                                                <div
+                                                    v-if="message.rag_steps && message.rag_steps.length"
+                                                    class="rag-steps"
+                                                >
+                                                    <div
+                                                        v-for="(step, index) in message.rag_steps"
+                                                        :key="index"
+                                                        class="rag-step"
+                                                    >
+                                                        <span>
+                                                            {{ step.icon || '•'
+                                                            }}
+                                                        </span>
+                                                        <strong>
+                                                            {{ step.label }}
+                                                        </strong>
+                                                        <em v-if="step.detail">
+                                                            {{ step.detail }}
+                                                        </em>
+                                                    </div>
+                                                </div>
+
+                                                <template
+                                                    v-if="message.rag_trace"
+                                                >
+                                                    <div class="trace-pills">
+                                                        <span
+                                                            v-if="message.rag_trace.retrieval_stage"
+                                                        >
+                                                            阶段：{{
+                                                            message.rag_trace.retrieval_stage
+                                                            }}
+                                                        </span>
+                                                        <span
+                                                            v-if="message.rag_trace.retrieval_mode"
+                                                        >
+                                                            模式：{{
+                                                            message.rag_trace.retrieval_mode
+                                                            }}
+                                                        </span>
+                                                        <span
+                                                            v-if="message.rag_trace.candidate_k"
+                                                        >
+                                                            候选：{{
+                                                            message.rag_trace.candidate_k
+                                                            }}
+                                                        </span>
+                                                        <span>
+                                                            Rerank：{{
+                                                            formatBool(message.rag_trace.rerank_applied)
+                                                            }}
+                                                        </span>
+                                                        <span>
+                                                            Auto-merge：{{
+                                                            formatBool(message.rag_trace.auto_merge_applied)
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                    <div class="trace-fields">
+                                                        <div
+                                                            v-if="message.rag_trace.query"
+                                                        >
+                                                            <strong>
+                                                                原始查询
+                                                            </strong>
+                                                            <p>
+                                                                {{
+                                                                message.rag_trace.query
+                                                                }}
+                                                            </p>
+                                                        </div>
+                                                        <div
+                                                            v-if="message.rag_trace.expanded_query && message.rag_trace.expanded_query !== message.rag_trace.query"
+                                                        >
+                                                            <strong>
+                                                                扩展查询
+                                                            </strong>
+                                                            <p>
+                                                                {{
+                                                                message.rag_trace.expanded_query
+                                                                }}
+                                                            </p>
+                                                        </div>
+                                                        <div
+                                                            v-if="message.rag_trace.step_back_question"
+                                                        >
+                                                            <strong>
+                                                                退步问题
+                                                            </strong>
+                                                            <p>
+                                                                {{
+                                                                message.rag_trace.step_back_question
+                                                                }}
+                                                            </p>
+                                                        </div>
+                                                        <div
+                                                            v-if="message.rag_trace.step_back_answer"
+                                                        >
+                                                            <strong>
+                                                                退步答案
+                                                            </strong>
+                                                            <p>
+                                                                {{
+                                                                message.rag_trace.step_back_answer
+                                                                }}
+                                                            </p>
+                                                        </div>
+                                                        <div
+                                                            v-if="message.rag_trace.hypothetical_doc"
+                                                        >
+                                                            <strong>
+                                                                HyDE 文档
+                                                            </strong>
+                                                            <p>
+                                                                {{
+                                                                chunkPreview(message.rag_trace.hypothetical_doc)
+                                                                }}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="trace-chunks">
+                                                        <strong>
+                                                            召回片段
+                                                        </strong>
+                                                        <div
+                                                            v-if="traceChunks(message.rag_trace).length === 0"
+                                                            class="muted-text"
+                                                        >
+                                                            本轮没有知识库召回片段
+                                                        </div>
+                                                        <div
+                                                            v-for="(chunk, index) in traceChunks(message.rag_trace)"
+                                                            :key="index + (chunk.chunk_id || chunk.filename || '')"
+                                                            class="trace-chunk"
+                                                        >
+                                                            <div>
+                                                                <strong>
+                                                                    #{{ index +
+                                                                    1 }} {{
+                                                                    chunk.filename
+                                                                    || 'Unknown'
+                                                                    }}
+                                                                </strong>
+                                                                <span>
+                                                                    Page {{
+                                                                    displayPage(chunk.page_number)
+                                                                    }} · L{{
+                                                                    chunk.chunk_level
+                                                                    || '-' }} ·
+                                                                    score {{
+                                                                    formatScore(chunk.rerank_score
+                                                                    ??
+                                                                    chunk.keyword_score
+                                                                    ??
+                                                                    chunk.score)
+                                                                    }}
+                                                                </span>
+                                                            </div>
+                                                            <p>
+                                                                {{
+                                                                chunkPreview(chunk.text)
+                                                                }}
+                                                            </p>
+                                                            <div
+                                                                v-if="visibleChunkImages(message, chunk).length"
+                                                                class="chunk-image-strip"
+                                                            >
+                                                                <a
+                                                                    v-for="(image, imageIndex) in visibleChunkImages(message, chunk)"
+                                                                    :key="image.url + imageIndex"
+                                                                    :href="assetUrl(image.url)"
+                                                                    target="_blank"
+                                                                    rel="noopener"
+                                                                >
+                                                                    <img
+                                                                        :src="assetUrl(image.url)"
+                                                                        :alt="imageAlt(image)"
+                                                                    />
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </details>
+                                        </div>
+                                    </div>
+                                </div>
+                                <footer class="composer">
+                                    <div class="composer-box">
+                                        <label
+                                            class="sr-only"
+                                            for="customer-message"
+                                        >
+                                            咨询内容
+                                        </label>
+                                        <textarea
+                                            id="customer-message"
+                                            name="message"
+                                            v-model="userInput"
+                                            v-autosize="userInput"
+                                            rows="1"
+                                            :disabled="sessionStatus === 'closed'"
+                                            :placeholder="sessionStatus === 'closed' ? '会话已结束，请新建会话' : '输入你的问题…'"
+                                            @keydown="handleUserKeydown"
+                                        ></textarea>
+                                        <div class="composer-toolbar">
+                                            <button
+                                                class="composer-human-btn"
+                                                aria-label="转人工"
+                                                title="转人工"
+                                                :disabled="sessionStatus !== 'ai_active' || isLoading"
+                                                @click="requestHuman"
+                                            >
+                                                <ui-icon
+                                                    name="headset"
+                                                ></ui-icon>
+                                                <span>转人工</span>
+                                            </button>
+                                            <button
+                                                class="send-btn"
+                                                aria-label="发送消息"
+                                                title="发送消息"
+                                                :disabled="sessionStatus === 'closed' || isLoading || !userInput.trim()"
+                                                @click="sendUserMessage"
+                                            >
+                                                <ui-icon
+                                                    :name="isLoading ? 'loader' : 'arrow-up'"
+                                                    :class="{spinning: isLoading}"
+                                                ></ui-icon>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </footer>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section
+                        v-else-if="isAdmin && activeView === 'workspace'"
+                        class="workspace-view"
+                        aria-labelledby="workspace-title"
+                    >
+                        <header class="topbar">
+                            <div class="page-heading">
+                                <button
+                                    id="queue-toggle"
+                                    class="icon-btn queue-toggle"
+                                    :aria-label="queueCollapsed ? '展开会话列表' : '收起会话列表'"
+                                    :title="queueCollapsed ? '展开会话列表' : '收起会话列表'"
+                                    :aria-expanded="!queueCollapsed"
+                                    aria-controls="conversation-queue"
+                                    @click="toggleQueue"
+                                >
+                                    <ui-icon
+                                        :name="queueCollapsed ? 'panel-open' : 'panel-close'"
+                                    ></ui-icon>
+                                </button>
+                                <h1 id="workspace-title">客服工作台</h1>
+                            </div>
+                            <button
+                                class="secondary-btn"
+                                @click="loadAdminConversations"
+                            >
+                                <ui-icon name="rotate"></ui-icon>
+                                <span>刷新</span>
+                            </button>
+                        </header>
+                        <div
+                            :class="['workspace-grid', { 'has-conversation': selectedConversation, 'queue-collapsed': queueCollapsed }]"
+                        >
+                            <aside
+                                id="conversation-queue"
+                                v-show="!queueCollapsed"
+                                class="queue-panel"
+                                aria-label="会话列表"
+                            >
+                                <div class="queue-heading">
+                                    <h2>
+                                        会话
+                                        <span class="inline-count">
+                                            {{ adminConversations.length }}
+                                        </span>
+                                    </h2>
+                                    <label
+                                        class="sr-only"
+                                        for="conversation-filter"
+                                    >
+                                        筛选会话状态
+                                    </label>
+                                    <select
+                                        id="conversation-filter"
+                                        name="status"
+                                        v-model="adminStatusFilter"
+                                        @change="loadAdminConversations"
+                                    >
+                                        <option
+                                            v-for="item in adminFilters"
+                                            :key="item.value"
+                                            :value="item.value"
+                                        >
+                                            {{ item.label }}{{ item.badge &&
+                                            adminHandoffRequestCount ? ' (' +
+                                            adminHandoffRequestCount + ')' : ''
+                                            }}
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="queue-list">
+                                    <div
+                                        v-if="adminConversations.length === 0"
+                                        class="list-empty"
+                                    >
+                                        <ui-icon name="inbox"></ui-icon>
+                                        <span>暂无会话</span>
+                                    </div>
+                                    <button
+                                        v-for="item in adminConversations"
+                                        :key="item.username + item.session_id"
+                                        :class="['queue-item', {active: isSelected(item)}]"
+                                        :aria-pressed="isSelected(item)"
+                                        :data-session-id="item.session_id"
+                                        @click="openConversation(item)"
+                                    >
+                                        <span class="queue-avatar">
+                                            {{ item.username.slice(0,
+                                            1).toUpperCase() }}
+                                        </span>
+                                        <span class="queue-content">
+                                            <span class="queue-title">
+                                                <strong>
+                                                    {{ item.username }}
+                                                </strong>
+                                                <span
+                                                    :class="['queue-status', item.status]"
+                                                >
+                                                    {{ statusText(item.status)
+                                                    }}
+                                                </span>
+                                            </span>
+                                            <small>
+                                                {{ item.last_message_preview ||
+                                                '暂无消息' }}
+                                            </small>
+                                        </span>
+                                        <em
+                                            v-if="item.unread_user_count"
+                                            class="unread-count"
+                                            aria-label="未读消息数"
+                                        >
+                                            {{ item.unread_user_count }}
+                                        </em>
+                                    </button>
+                                </div>
+                                <ui-resize-handle
+                                    label="调整会话列表宽度"
+                                    controls="conversation-queue"
+                                    :value="queueWidth"
+                                    :min="panelSizes.queue.min"
+                                    :max="queueMaxWidth"
+                                    :initial="panelSizes.queue.initial"
+                                    @resize="resizePanel('queue', $event)"
+                                    @commit="saveLayout"
+                                ></ui-resize-handle>
+                            </aside>
+                            <section class="agent-chat" aria-label="会话详情">
+                                <div
+                                    v-if="!selectedConversation"
+                                    class="empty-state"
+                                >
+                                    <div class="empty-visual">
+                                        <ui-icon name="comments"></ui-icon>
+                                    </div>
+                                    <h2>选择会话开始处理</h2>
+                                </div>
+                                <template v-else>
+                                    <div class="conversation-head">
+                                        <button
+                                            class="icon-btn back-to-queue"
+                                            aria-label="返回会话列表"
+                                            @click="backToQueue"
+                                        >
+                                            <ui-icon
+                                                name="arrow-left"
+                                            ></ui-icon>
+                                        </button>
+                                        <div class="conversation-identity">
+                                            <span class="queue-avatar">
+                                                {{
+                                                selectedConversation.username.slice(0,
+                                                1).toUpperCase() }}
+                                            </span>
+                                            <div>
+                                                <strong
+                                                    :title="selectedConversation.session_id"
+                                                >
+                                                    {{
+                                                    selectedConversation.username
+                                                    }}
+                                                </strong>
+                                                <span
+                                                    :class="['status-pill', selectedConversation.status]"
+                                                >
+                                                    {{
+                                                    statusText(selectedConversation.status)
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="action-row">
+                                            <button
+                                                v-if="['ai_active', 'handoff_requested'].includes(selectedConversation.status)"
+                                                class="primary-btn agent-action-btn"
+                                                @click="takeoverConversation"
+                                            >
+                                                <ui-icon
+                                                    name="headset"
+                                                ></ui-icon>
+                                                {{ selectedConversation.status
+                                                === 'ai_active' ? '接管' :
+                                                '接入' }}
+                                            </button>
+                                            <button
+                                                v-if="selectedConversation.status !== 'closed'"
+                                                class="secondary-btn agent-action-btn"
+                                                @click="closeConversation"
+                                            >
+                                                结束会话
+                                            </button>
+                                            <button
+                                                class="icon-btn danger"
+                                                aria-label="删除会话记录"
+                                                title="删除会话记录"
+                                                @click="deleteConversation"
+                                            >
+                                                <ui-icon name="trash"></ui-icon>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="messages agent-messages"
+                                        ref="adminMessagesContainer"
+                                        role="region"
+                                        aria-label="会话消息"
+                                        tabindex="0"
+                                    >
+                                        <div
+                                            v-for="message in adminMessages"
+                                            :key="message.id || message.localId"
+                                            :class="['message-row', message.sender_type, {streaming: message.streaming}]"
+                                        >
+                                            <div
+                                                class="message-avatar"
+                                                aria-hidden="true"
+                                            >
+                                                <ui-icon
+                                                    :name="message.sender_type === 'ai' ? 'sparkles' : (message.sender_type === 'admin' ? 'headset' : 'user')"
+                                                ></ui-icon>
+                                            </div>
+                                            <div class="bubble">
+                                                <div class="message-name">
+                                                    {{ senderName(message,
+                                                    'admin') }}
+                                                </div>
+                                                <div
+                                                    v-if="message.sender_type === 'ai' && message.content"
+                                                    v-html="parseMarkdown(message.content)"
+                                                ></div>
+                                                <div
+                                                    v-else-if="message.sender_type !== 'ai'"
+                                                >
+                                                    {{ message.content }}
+                                                </div>
+                                                <div
+                                                    v-if="message.sender_type === 'ai' && hasLiveActivity(message)"
+                                                    class="ai-activity"
+                                                >
+                                                    <div
+                                                        class="ai-activity-head"
+                                                    >
+                                                        <span
+                                                            class="typing-dots"
+                                                        >
+                                                            <i></i>
+                                                            <i></i>
+                                                            <i></i>
+                                                        </span>
+                                                        <strong>
+                                                            {{
+                                                            currentAiAction(message)
+                                                            }}
+                                                        </strong>
+                                                    </div>
+                                                    <div
+                                                        v-if="activitySteps(message).length"
+                                                        class="ai-activity-steps"
+                                                    >
+                                                        <div
+                                                            v-for="(step, index) in activitySteps(message)"
+                                                            :key="index"
+                                                            class="ai-activity-step"
+                                                        >
+                                                            <span>
+                                                                {{ step.icon ||
+                                                                '•' }}
+                                                            </span>
+                                                            <div>
+                                                                <strong>
+                                                                    {{
+                                                                    step.label
+                                                                    ||
+                                                                    '正在处理'
+                                                                    }}
+                                                                </strong>
+                                                                <em
+                                                                    v-if="step.detail"
+                                                                >
+                                                                    {{
+                                                                    step.detail
+                                                                    }}
+                                                                </em>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div
+                                                    v-if="messageImages(message).length"
+                                                    class="message-images"
+                                                >
+                                                    <figure
+                                                        v-for="(image, index) in messageImages(message)"
+                                                        :key="image.url + index"
+                                                        class="message-image-card"
+                                                    >
+                                                        <a
+                                                            :href="assetUrl(image.url)"
+                                                            target="_blank"
+                                                            rel="noopener"
+                                                        >
+                                                            <img
+                                                                :src="assetUrl(image.url)"
+                                                                :alt="imageAlt(image)"
+                                                            />
+                                                        </a>
+                                                        <figcaption>
+                                                            <strong>
+                                                                {{ image.caption
+                                                                ||
+                                                                image.filename
+                                                                || 'PDF 图片' }}
+                                                            </strong>
+                                                            <span>
+                                                                {{
+                                                                imageMeta(image)
+                                                                }}
+                                                            </span>
+                                                        </figcaption>
+                                                    </figure>
+                                                </div>
+                                                <details
+                                                    v-if="hasRagDetails(message)"
+                                                    class="rag-trace"
+                                                    :open="message.streaming"
+                                                >
+                                                    <summary>
+                                                        <span>检索全流程</span>
+                                                        <em
+                                                            v-if="ragTraceStatus(message)"
+                                                        >
+                                                            {{
+                                                            ragTraceStatus(message)
+                                                            }}
+                                                        </em>
+                                                    </summary>
+
+                                                    <div
+                                                        v-if="message.rag_steps && message.rag_steps.length"
+                                                        class="rag-steps"
+                                                    >
+                                                        <div
+                                                            v-for="(step, index) in message.rag_steps"
+                                                            :key="index"
+                                                            class="rag-step"
+                                                        >
+                                                            <span>
+                                                                {{ step.icon ||
+                                                                '•' }}
+                                                            </span>
+                                                            <strong>
+                                                                {{ step.label }}
+                                                            </strong>
+                                                            <em
+                                                                v-if="step.detail"
+                                                            >
+                                                                {{ step.detail
+                                                                }}
+                                                            </em>
+                                                        </div>
+                                                    </div>
+
+                                                    <template
+                                                        v-if="message.rag_trace"
+                                                    >
+                                                        <div
+                                                            class="trace-pills"
+                                                        >
+                                                            <span
+                                                                v-if="message.rag_trace.retrieval_stage"
+                                                            >
+                                                                阶段：{{
+                                                                message.rag_trace.retrieval_stage
+                                                                }}
+                                                            </span>
+                                                            <span
+                                                                v-if="message.rag_trace.retrieval_mode"
+                                                            >
+                                                                模式：{{
+                                                                message.rag_trace.retrieval_mode
+                                                                }}
+                                                            </span>
+                                                            <span
+                                                                v-if="message.rag_trace.candidate_k"
+                                                            >
+                                                                候选：{{
+                                                                message.rag_trace.candidate_k
+                                                                }}
+                                                            </span>
+                                                            <span>
+                                                                Rerank：{{
+                                                                formatBool(message.rag_trace.rerank_applied)
+                                                                }}
+                                                            </span>
+                                                            <span>
+                                                                Auto-merge：{{
+                                                                formatBool(message.rag_trace.auto_merge_applied)
+                                                                }}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="trace-fields"
+                                                        >
+                                                            <div
+                                                                v-if="message.rag_trace.query"
+                                                            >
+                                                                <strong>
+                                                                    原始查询
+                                                                </strong>
+                                                                <p>
+                                                                    {{
+                                                                    message.rag_trace.query
+                                                                    }}
+                                                                </p>
+                                                            </div>
+                                                            <div
+                                                                v-if="message.rag_trace.expanded_query && message.rag_trace.expanded_query !== message.rag_trace.query"
+                                                            >
+                                                                <strong>
+                                                                    扩展查询
+                                                                </strong>
+                                                                <p>
+                                                                    {{
+                                                                    message.rag_trace.expanded_query
+                                                                    }}
+                                                                </p>
+                                                            </div>
+                                                            <div
+                                                                v-if="message.rag_trace.step_back_question"
+                                                            >
+                                                                <strong>
+                                                                    退步问题
+                                                                </strong>
+                                                                <p>
+                                                                    {{
+                                                                    message.rag_trace.step_back_question
+                                                                    }}
+                                                                </p>
+                                                            </div>
+                                                            <div
+                                                                v-if="message.rag_trace.step_back_answer"
+                                                            >
+                                                                <strong>
+                                                                    退步答案
+                                                                </strong>
+                                                                <p>
+                                                                    {{
+                                                                    message.rag_trace.step_back_answer
+                                                                    }}
+                                                                </p>
+                                                            </div>
+                                                            <div
+                                                                v-if="message.rag_trace.hypothetical_doc"
+                                                            >
+                                                                <strong>
+                                                                    HyDE 文档
+                                                                </strong>
+                                                                <p>
+                                                                    {{
+                                                                    chunkPreview(message.rag_trace.hypothetical_doc)
+                                                                    }}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            class="trace-chunks"
+                                                        >
+                                                            <strong>
+                                                                召回片段
+                                                            </strong>
+                                                            <div
+                                                                v-if="traceChunks(message.rag_trace).length === 0"
+                                                                class="muted-text"
+                                                            >
+                                                                本轮没有知识库召回片段
+                                                            </div>
+                                                            <div
+                                                                v-for="(chunk, index) in traceChunks(message.rag_trace)"
+                                                                :key="index + (chunk.chunk_id || chunk.filename || '')"
+                                                                class="trace-chunk"
+                                                            >
+                                                                <div>
+                                                                    <strong>
+                                                                        #{{
+                                                                        index +
+                                                                        1 }} {{
+                                                                        chunk.filename
+                                                                        ||
+                                                                        'Unknown'
+                                                                        }}
+                                                                    </strong>
+                                                                    <span>
+                                                                        Page {{
+                                                                        displayPage(chunk.page_number)
+                                                                        }} · L{{
+                                                                        chunk.chunk_level
+                                                                        || '-'
+                                                                        }} ·
+                                                                        score {{
+                                                                        formatScore(chunk.rerank_score
+                                                                        ??
+                                                                        chunk.keyword_score
+                                                                        ??
+                                                                        chunk.score)
+                                                                        }}
+                                                                    </span>
+                                                                </div>
+                                                                <p>
+                                                                    {{
+                                                                    chunkPreview(chunk.text)
+                                                                    }}
+                                                                </p>
+                                                                <div
+                                                                    v-if="visibleChunkImages(message, chunk).length"
+                                                                    class="chunk-image-strip"
+                                                                >
+                                                                    <a
+                                                                        v-for="(image, imageIndex) in visibleChunkImages(message, chunk)"
+                                                                        :key="image.url + imageIndex"
+                                                                        :href="assetUrl(image.url)"
+                                                                        target="_blank"
+                                                                        rel="noopener"
+                                                                    >
+                                                                        <img
+                                                                            :src="assetUrl(image.url)"
+                                                                            :alt="imageAlt(image)"
+                                                                        />
+                                                                    </a>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                </details>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <footer class="composer">
+                                        <div class="composer-box">
+                                            <label
+                                                class="sr-only"
+                                                for="agent-reply"
+                                            >
+                                                人工客服回复
+                                            </label>
+                                            <textarea
+                                                id="agent-reply"
+                                                name="reply"
+                                                v-model="adminReply"
+                                                v-autosize="adminReply"
+                                                rows="1"
+                                                :disabled="selectedConversation.status === 'closed'"
+                                                :placeholder="selectedConversation.status === 'closed' ? '会话已结束' : '输入回复…'"
+                                                @keydown="handleAdminKeydown"
+                                            ></textarea>
+                                            <div class="composer-toolbar">
+                                                <button
+                                                    class="send-btn"
+                                                    aria-label="发送回复"
+                                                    title="发送回复"
+                                                    :disabled="!canReply"
+                                                    @click="sendAdminReply"
+                                                >
+                                                    <ui-icon
+                                                        name="arrow-up"
+                                                    ></ui-icon>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </footer>
+                                </template>
+                            </section>
+                        </div>
+                    </section>
+
+                    <section
+                        v-else-if="isAdmin && activeView === 'users'"
+                        class="plain-view"
+                        aria-labelledby="users-title"
+                    >
+                        <header class="topbar">
+                            <h1 id="users-title">用户管理</h1>
+                            <button
+                                class="primary-btn"
+                                @click="resetUserForm(); focusField('user-name')"
+                            >
+                                <ui-icon name="plus"></ui-icon>
+                                <span>新增用户</span>
+                            </button>
+                        </header>
+                        <div class="page-content users-grid">
+                            <section
+                                class="panel users-list"
+                                aria-labelledby="user-list-title"
+                            >
+                                <div class="panel-head">
+                                    <h2 id="user-list-title">
+                                        用户列表
+                                        <span class="inline-count">
+                                            {{ users.length }}
+                                        </span>
+                                    </h2>
+                                </div>
+                                <form
+                                    class="search-toolbar"
+                                    role="search"
+                                    aria-label="搜索用户"
+                                    @submit.prevent="loadUsers"
+                                >
+                                    <div class="search-field">
+                                        <ui-icon
+                                            name="magnifying-glass"
+                                        ></ui-icon>
+                                        <label
+                                            class="sr-only"
+                                            for="user-search"
+                                        >
+                                            搜索用户名或角色
+                                        </label>
+                                        <input
+                                            id="user-search"
+                                            name="keyword"
+                                            v-model="userKeyword"
+                                            type="search"
+                                            placeholder="搜索用户名或角色"
+                                        />
+                                    </div>
+                                    <button class="secondary-btn" type="submit">
+                                        搜索
+                                    </button>
+                                    <button
+                                        class="icon-btn"
+                                        type="button"
+                                        aria-label="重置用户搜索"
+                                        title="重置搜索"
+                                        @click="clearUserSearch"
+                                    >
+                                        <ui-icon name="rotate"></ui-icon>
+                                    </button>
+                                </form>
+                                <div
+                                    class="table-scroll"
+                                    role="region"
+                                    aria-label="用户列表表格"
+                                    tabindex="0"
+                                >
+                                    <table class="users-table">
+                                        <caption class="sr-only">
+                                            用户、角色、会话数和创建时间
+                                        </caption>
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">用户名</th>
+                                                <th scope="col">角色</th>
+                                                <th scope="col">会话数</th>
+                                                <th scope="col">创建时间</th>
+                                                <th
+                                                    scope="col"
+                                                    class="actions-heading"
+                                                >
+                                                    操作
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-if="users.length === 0">
+                                                <td
+                                                    colspan="5"
+                                                    class="history-empty"
+                                                >
+                                                    暂无用户
+                                                </td>
+                                            </tr>
+                                            <tr
+                                                v-for="user in users"
+                                                :key="user.id"
+                                            >
+                                                <th scope="row">
+                                                    <div class="table-user">
+                                                        <span
+                                                            class="small-avatar"
+                                                        >
+                                                            {{
+                                                            user.username.slice(0,
+                                                            1).toUpperCase() }}
+                                                        </span>
+                                                        <strong>
+                                                            {{ user.username }}
+                                                        </strong>
+                                                    </div>
+                                                </th>
+                                                <td>
+                                                    <span
+                                                        :class="['role-label', { 'role-admin': user.role === 'admin' }]"
+                                                    >
+                                                        {{ user.role === 'admin'
+                                                        ? '管理员' : '普通用户'
+                                                        }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    {{ user.session_count }}
+                                                </td>
+                                                <td>
+                                                    <time>
+                                                        {{ new
+                                                        Date(user.created_at).toLocaleString()
+                                                        }}
+                                                    </time>
+                                                </td>
+                                                <td>
+                                                    <div class="table-actions">
+                                                        <button
+                                                            class="icon-btn"
+                                                            type="button"
+                                                            :aria-label="'编辑用户 ' + user.username"
+                                                            title="编辑用户"
+                                                            @click="editUser(user)"
+                                                        >
+                                                            <ui-icon
+                                                                name="pen"
+                                                            ></ui-icon>
+                                                        </button>
+                                                        <button
+                                                            class="icon-btn danger"
+                                                            type="button"
+                                                            :aria-label="'删除用户 ' + user.username"
+                                                            title="删除用户"
+                                                            @click="deleteUser(user)"
+                                                        >
+                                                            <ui-icon
+                                                                name="trash"
+                                                            ></ui-icon>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+                            <form
+                                id="user-editor"
+                                class="panel editor-panel"
+                                aria-labelledby="user-form-title"
+                                @submit.prevent="saveUser"
+                            >
+                                <div class="panel-head">
+                                    <h2 id="user-form-title">
+                                        {{ editingUserId ? '编辑用户' :
+                                        '新增用户' }}
+                                    </h2>
+                                    <ui-icon name="user-plus"></ui-icon>
+                                </div>
+                                <div class="field">
+                                    <label for="user-name">
+                                        用户名
+                                        <span class="required-mark">*</span>
+                                    </label>
+                                    <input
+                                        id="user-name"
+                                        name="username"
+                                        v-model="userForm.username"
+                                        type="text"
+                                        autocomplete="off"
+                                        required
+                                    />
+                                </div>
+                                <div class="field">
+                                    <label for="user-password">
+                                        {{ editingUserId ? '新密码' : '密码' }}
+                                        <span
+                                            v-if="!editingUserId"
+                                            class="required-mark"
+                                        >
+                                            *
+                                        </span>
+                                    </label>
+                                    <input
+                                        id="user-password"
+                                        name="password"
+                                        v-model="userForm.password"
+                                        type="password"
+                                        autocomplete="new-password"
+                                        :required="!editingUserId"
+                                        :placeholder="editingUserId ? '留空保留原密码' : '设置登录密码'"
+                                    />
+                                </div>
+                                <div class="field">
+                                    <label for="user-role">角色</label>
+                                    <select
+                                        id="user-role"
+                                        name="role"
+                                        v-model="userForm.role"
+                                    >
+                                        <option value="user">普通用户</option>
+                                        <option value="admin">管理员</option>
+                                    </select>
+                                </div>
+                                <div class="editor-actions">
+                                    <button
+                                        class="primary-btn"
+                                        type="submit"
+                                        :disabled="userSaving"
+                                    >
+                                        {{ userSaving ? '保存中…' : '保存用户'
+                                        }}
+                                    </button>
+                                    <button
+                                        v-if="editingUserId"
+                                        class="secondary-btn"
+                                        type="button"
+                                        @click="resetUserForm"
+                                    >
+                                        取消编辑
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <section
+                        v-else-if="isAdmin && activeView === 'products'"
+                        class="plain-view"
+                        aria-labelledby="products-title"
+                    >
+                        <header class="topbar">
+                            <h1 id="products-title">商品库</h1>
+                            <button
+                                class="primary-btn"
+                                @click="resetProductForm(); focusField('product-name')"
+                            >
+                                <ui-icon name="plus"></ui-icon>
+                                <span>新增商品</span>
+                            </button>
+                        </header>
+                        <div class="page-content products-grid">
+                            <section
+                                class="product-list-panel"
+                                aria-labelledby="product-list-title"
+                            >
+                                <div class="panel product-list-toolbar">
+                                    <div class="panel-head">
+                                        <h2 id="product-list-title">
+                                            商品列表
+                                            <span class="inline-count">
+                                                {{ products.length }}
+                                            </span>
+                                        </h2>
+                                    </div>
+                                    <form
+                                        class="search-toolbar"
+                                        role="search"
+                                        aria-label="搜索商品"
+                                        @submit.prevent="loadProducts"
+                                    >
+                                        <div class="search-field">
+                                            <ui-icon
+                                                name="magnifying-glass"
+                                            ></ui-icon>
+                                            <label
+                                                class="sr-only"
+                                                for="product-search"
+                                            >
+                                                搜索商品名、类别或材质
+                                            </label>
+                                            <input
+                                                id="product-search"
+                                                name="keyword"
+                                                v-model="productKeyword"
+                                                type="search"
+                                                placeholder="搜索商品名、类别或材质"
+                                            />
+                                        </div>
+                                        <button
+                                            class="secondary-btn"
+                                            type="submit"
+                                        >
+                                            搜索
+                                        </button>
+                                        <button
+                                            class="icon-btn"
+                                            type="button"
+                                            aria-label="重置商品搜索"
+                                            title="重置搜索"
+                                            @click="clearProductSearch"
+                                        >
+                                            <ui-icon name="rotate"></ui-icon>
+                                        </button>
+                                    </form>
+                                </div>
+                                <div
+                                    v-if="products.length === 0"
+                                    class="panel list-empty"
+                                >
+                                    <ui-icon name="box-open"></ui-icon>
+                                    <span>暂无商品</span>
+                                </div>
+                                <div class="product-cards">
+                                    <article
+                                        v-for="product in products"
+                                        :key="product.id"
+                                        class="product-card"
+                                    >
+                                        <div class="product-thumb">
+                                            <img
+                                                v-if="product.image_url"
+                                                :src="assetUrl(product.image_url)"
+                                                :alt="product.name"
+                                                loading="lazy"
+                                            />
+                                            <ui-icon
+                                                v-else
+                                                name="box-open"
+                                            ></ui-icon>
+                                        </div>
+                                        <div class="product-main">
+                                            <div class="product-title-row">
+                                                <div>
+                                                    <h3>{{ product.name }}</h3>
+                                                    <span
+                                                        v-if="product.category"
+                                                        class="product-category"
+                                                    >
+                                                        {{ product.category }}
+                                                    </span>
+                                                </div>
+                                                <div class="table-actions">
+                                                    <button
+                                                        class="icon-btn"
+                                                        type="button"
+                                                        :aria-label="'编辑商品 ' + product.name"
+                                                        title="编辑商品"
+                                                        @click="editProduct(product)"
+                                                    >
+                                                        <ui-icon
+                                                            name="pen"
+                                                        ></ui-icon>
+                                                    </button>
+                                                    <button
+                                                        class="icon-btn danger"
+                                                        type="button"
+                                                        :aria-label="'删除商品 ' + product.name"
+                                                        title="删除商品"
+                                                        @click="deleteProduct(product)"
+                                                    >
+                                                        <ui-icon
+                                                            name="trash"
+                                                        ></ui-icon>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="product-meta">
+                                                <strong class="product-price">
+                                                    {{ product.price || '—' }}
+                                                </strong>
+                                                <span>
+                                                    库存 {{ product.stock }}
+                                                </span>
+                                                <span v-if="product.material">
+                                                    {{ product.material }}
+                                                </span>
+                                            </div>
+                                            <p
+                                                v-if="product.specifications"
+                                                class="product-specifications"
+                                            >
+                                                {{ product.specifications }}
+                                            </p>
+                                        </div>
+                                    </article>
+                                </div>
+                            </section>
+                            <form
+                                id="product-editor"
+                                class="panel editor-panel"
+                                aria-labelledby="product-form-title"
+                                @submit.prevent="saveProduct"
+                            >
+                                <div class="panel-head">
+                                    <h2 id="product-form-title">
+                                        {{ editingProductId ? '编辑商品' :
+                                        '新增商品' }}
+                                    </h2>
+                                    <ui-icon name="box-open"></ui-icon>
+                                </div>
+                                <div class="field">
+                                    <label for="product-name">
+                                        商品名称
+                                        <span class="required-mark">*</span>
+                                    </label>
+                                    <input
+                                        id="product-name"
+                                        name="name"
+                                        v-model="productForm.name"
+                                        type="text"
+                                        required
+                                    />
+                                </div>
+                                <div class="field">
+                                    <label for="product-category">类别</label>
+                                    <input
+                                        id="product-category"
+                                        name="category"
+                                        v-model="productForm.category"
+                                        type="text"
+                                    />
+                                </div>
+                                <div class="form-two">
+                                    <div class="field">
+                                        <label for="product-price">价格</label>
+                                        <input
+                                            id="product-price"
+                                            name="price"
+                                            v-model="productForm.price"
+                                            type="text"
+                                            placeholder="例如 299 元"
+                                        />
+                                    </div>
+                                    <div class="field">
+                                        <label for="product-stock">库存</label>
+                                        <input
+                                            id="product-stock"
+                                            name="stock"
+                                            v-model.number="productForm.stock"
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            inputmode="numeric"
+                                        />
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label for="product-material">材质</label>
+                                    <input
+                                        id="product-material"
+                                        name="material"
+                                        v-model="productForm.material"
+                                        type="text"
+                                    />
+                                </div>
+                                <div class="field">
+                                    <label for="product-specifications">
+                                        规格
+                                    </label>
+                                    <textarea
+                                        id="product-specifications"
+                                        name="specifications"
+                                        v-model="productForm.specifications"
+                                        rows="3"
+                                        placeholder="尺寸、颜色、型号等"
+                                    ></textarea>
+                                </div>
+                                <div class="field upload-control">
+                                    <label for="product-image">商品图片</label>
+                                    <label
+                                        class="file-picker compact-picker"
+                                        for="product-image"
+                                    >
+                                        <ui-icon name="image"></ui-icon>
+                                        <span>
+                                            {{ selectedProductImage ?
+                                            selectedProductImage.name :
+                                            '选择图片' }}
+                                            <small>
+                                                JPG / PNG / WebP / GIF
+                                            </small>
+                                        </span>
+                                    </label>
+                                    <input
+                                        id="product-image"
+                                        name="image"
+                                        class="sr-only"
+                                        ref="productImageInput"
+                                        type="file"
+                                        accept=".jpg,.jpeg,.png,.webp,.gif"
+                                        @change="handleProductImageSelect"
+                                    />
+                                </div>
+                                <figure
+                                    v-if="productForm.image_url"
+                                    class="product-current-image"
+                                >
+                                    <img
+                                        :src="assetUrl(productForm.image_url)"
+                                        :alt="productForm.name || '商品图'"
+                                    />
+                                </figure>
+                                <p
+                                    v-if="productNotice"
+                                    class="notice"
+                                    role="status"
+                                >
+                                    {{ productNotice }}
+                                </p>
+                                <div class="editor-actions">
+                                    <button
+                                        class="primary-btn"
+                                        type="submit"
+                                        :disabled="productSaving"
+                                    >
+                                        {{ productSaving ? '保存中…' :
+                                        '保存商品' }}
+                                    </button>
+                                    <button
+                                        v-if="editingProductId"
+                                        class="secondary-btn"
+                                        type="button"
+                                        @click="resetProductForm"
+                                    >
+                                        取消编辑
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <section
+                        v-else-if="isAdmin && activeView === 'knowledge'"
+                        class="plain-view"
+                        aria-labelledby="knowledge-title"
+                    >
+                        <header class="topbar">
+                            <h1 id="knowledge-title">知识库</h1>
+                            <button
+                                class="secondary-btn"
+                                @click="refreshKnowledge"
+                            >
+                                <ui-icon name="rotate"></ui-icon>
+                                <span>刷新</span>
+                            </button>
+                        </header>
+                        <div class="page-content knowledge-grid">
+                            <section
+                                class="panel document-panel"
+                                aria-labelledby="documents-title"
+                            >
+                                <div class="panel-head">
+                                    <h2 id="documents-title">
+                                        文档
+                                        <span class="inline-count">
+                                            {{ documents.length }}
+                                        </span>
+                                    </h2>
+                                    <ui-icon name="folder-open"></ui-icon>
+                                </div>
+                                <div
+                                    v-if="documents.length === 0"
+                                    class="list-empty"
+                                >
+                                    <ui-icon name="file-lines"></ui-icon>
+                                    <span>暂无文档</span>
+                                </div>
+                                <div
+                                    v-for="doc in documents"
+                                    :key="doc.filename"
+                                    class="doc-row"
+                                >
+                                    <span class="file-type-icon">
+                                        <ui-icon name="file-lines"></ui-icon>
+                                    </span>
+                                    <div class="doc-info">
+                                        <strong>{{ doc.filename }}</strong>
+                                        <span>
+                                            {{ doc.file_type }} · {{
+                                            doc.chunk_count }} 个片段
+                                        </span>
+                                    </div>
+                                    <button
+                                        class="icon-btn danger"
+                                        :aria-label="'删除文档 ' + doc.filename"
+                                        title="删除文档"
+                                        @click="deleteDocument(doc.filename)"
+                                    >
+                                        <ui-icon name="trash"></ui-icon>
+                                    </button>
+                                </div>
+                            </section>
+                            <section
+                                class="panel upload-panel"
+                                aria-labelledby="upload-title"
+                            >
+                                <div class="panel-head">
+                                    <h2 id="upload-title">上传文档</h2>
+                                    <ui-icon name="upload"></ui-icon>
+                                </div>
+                                <div class="upload-control">
+                                    <label
+                                        class="file-picker"
+                                        for="knowledge-file"
+                                    >
+                                        <ui-icon name="upload"></ui-icon>
+                                        <strong>
+                                            {{ selectedFile ? selectedFile.name
+                                            : '选择文档' }}
+                                        </strong>
+                                        <span>PDF / Word / Excel</span>
+                                    </label>
+                                    <input
+                                        id="knowledge-file"
+                                        name="file"
+                                        class="sr-only"
+                                        ref="fileInput"
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx"
+                                        @change="handleFileSelect"
+                                    />
+                                </div>
+                                <button
+                                    class="primary-btn"
+                                    :disabled="!selectedFile || isUploading"
+                                    @click="uploadDocument"
+                                >
+                                    <ui-icon
+                                        :name="isUploading ? 'loader' : 'plus'"
+                                        :class="{spinning: isUploading}"
+                                    ></ui-icon>
+                                    {{ isUploading ? '上传中…' : '上传到知识库'
+                                    }}
+                                </button>
+                                <p
+                                    v-if="uploadProgress"
+                                    class="notice"
+                                    role="status"
+                                >
+                                    {{ uploadProgress }}
+                                </p>
+                            </section>
+                            <details class="panel rag-flow-panel">
+                                <summary class="panel-head">
+                                    <span class="details-heading">
+                                        <ui-icon name="sliders"></ui-icon>
+                                        <strong>检索诊断</strong>
+                                    </span>
+                                    <ui-icon
+                                        name="chevron-down"
+                                        class="details-chevron"
+                                    ></ui-icon>
+                                </summary>
+                                <div class="rag-flow-content">
+                                    <div v-if="!ragPipeline" class="muted-text">
+                                        正在加载链路状态...
+                                    </div>
+                                    <template v-else>
+                                        <div class="pipeline-metrics">
+                                            <div>
+                                                <span>集合</span>
+                                                <strong>
+                                                    {{
+                                                    ragPipeline.settings.collection
+                                                    }}
+                                                </strong>
+                                            </div>
+                                            <div>
+                                                <span>召回模式</span>
+                                                <strong>
+                                                    {{
+                                                    ragPipeline.settings.sparse_method
+                                                    }} + Dense
+                                                </strong>
+                                            </div>
+                                            <div>
+                                                <span>融合</span>
+                                                <strong>
+                                                    {{
+                                                    ragPipeline.settings.fusion
+                                                    }}
+                                                </strong>
+                                            </div>
+                                            <div>
+                                                <span>精排</span>
+                                                <strong>
+                                                    {{
+                                                    formatBool(ragPipeline.settings.rerank_enabled)
+                                                    }}
+                                                </strong>
+                                            </div>
+                                        </div>
+
+                                        <div class="flow-columns">
+                                            <div>
+                                                <h3>索引流程</h3>
+                                                <div
+                                                    v-for="step in ragPipeline.indexing_flow"
+                                                    :key="step.name"
+                                                    class="flow-item"
+                                                >
+                                                    <strong>
+                                                        {{ step.name }}
+                                                    </strong>
+                                                    <span>
+                                                        {{ step.detail }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <h3>检索流程</h3>
+                                                <div
+                                                    v-for="step in ragPipeline.retrieval_flow"
+                                                    :key="step.name"
+                                                    class="flow-item"
+                                                >
+                                                    <strong>
+                                                        {{ step.name }}
+                                                    </strong>
+                                                    <span>
+                                                        {{ step.detail }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="doc-stats">
+                                            <h3>当前索引统计</h3>
+                                            <div
+                                                v-if="ragPipeline.document_stats.length === 0"
+                                                class="muted-text"
+                                            >
+                                                暂无索引片段
+                                            </div>
+                                            <div
+                                                v-for="stat in ragPipeline.document_stats"
+                                                :key="stat.filename"
+                                                class="stat-row"
+                                            >
+                                                <strong>
+                                                    {{ stat.filename }}
+                                                </strong>
+                                                <span>
+                                                    L1 {{ stat.level_1 || 0 }} ·
+                                                    L2 {{ stat.level_2 || 0 }} ·
+                                                    L3 {{ stat.level_3 || 0 }}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div class="rag-diagnostic">
+                                            <h3>检索测试</h3>
+                                            <div class="diagnostic-input">
+                                                <label
+                                                    class="sr-only"
+                                                    for="rag-query"
+                                                >
+                                                    检索测试问题
+                                                </label>
+                                                <input
+                                                    id="rag-query"
+                                                    name="query"
+                                                    v-model="ragTestQuery"
+                                                    type="text"
+                                                    placeholder="输入要测试的问题"
+                                                    @keydown.enter="!$event.isComposing && runRagDiagnostic()"
+                                                />
+                                                <button
+                                                    class="secondary-btn"
+                                                    :disabled="ragTestLoading || !ragTestQuery.trim()"
+                                                    @click="runRagDiagnostic"
+                                                >
+                                                    <ui-icon
+                                                        name="magnifying-glass"
+                                                    ></ui-icon>
+                                                    <span>
+                                                        {{ ragTestLoading ?
+                                                        '检索中...' : '测试' }}
+                                                    </span>
+                                                </button>
+                                            </div>
+                                            <div
+                                                v-if="ragTestResult"
+                                                class="diagnostic-result"
+                                            >
+                                                <div class="result-meta">
+                                                    <span>
+                                                        模式：{{
+                                                        ragTestResult.meta.retrieval_mode
+                                                        || '-' }}
+                                                    </span>
+                                                    <span>
+                                                        候选：{{
+                                                        ragTestResult.meta.candidate_count
+                                                        ??
+                                                        ragTestResult.chunks.length
+                                                        }}
+                                                    </span>
+                                                    <span>
+                                                        Rerank：{{
+                                                        formatBool(ragTestResult.meta.rerank_applied)
+                                                        }}
+                                                    </span>
+                                                    <span>
+                                                        Auto-merge：{{
+                                                        formatBool(ragTestResult.meta.auto_merge_applied)
+                                                        }}
+                                                    </span>
+                                                </div>
+                                                <p
+                                                    v-if="ragTestResult.meta.retrieval_error"
+                                                    class="warning-text"
+                                                >
+                                                    {{
+                                                    ragTestResult.meta.retrieval_error
+                                                    }}
+                                                </p>
+                                                <p
+                                                    v-if="ragTestResult.meta.rerank_error"
+                                                    class="warning-text"
+                                                >
+                                                    Rerank：{{
+                                                    ragTestResult.meta.rerank_error
+                                                    }}
+                                                </p>
+                                                <div
+                                                    v-if="ragTestResult.chunks.length === 0"
+                                                    class="muted-text"
+                                                >
+                                                    没有召回片段
+                                                </div>
+                                                <div
+                                                    v-for="chunk in ragTestResult.chunks"
+                                                    :key="chunk.rank + chunk.chunk_id"
+                                                    class="chunk-row"
+                                                >
+                                                    <div>
+                                                        <strong>
+                                                            #{{ chunk.rank }} {{
+                                                            chunk.filename }}
+                                                        </strong>
+                                                        <span>
+                                                            Page {{
+                                                            chunk.page_number }}
+                                                            · L{{
+                                                            chunk.chunk_level }}
+                                                            · score {{
+                                                            formatScore(chunk.rerank_score
+                                                            ??
+                                                            chunk.keyword_score
+                                                            ?? chunk.score) }}
+                                                        </span>
+                                                    </div>
+                                                    <p>
+                                                        {{
+                                                        chunkPreview(chunk.text)
+                                                        }}
+                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
                                     </template>
-                                </details>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <footer class="composer">
-                    <button class="secondary-btn" :disabled="sessionStatus !== 'ai_active' || isLoading" @click="requestHuman">
-                        <i class="fas fa-headset"></i><span>转人工</span>
-                    </button>
-                    <textarea v-model="userInput" rows="1" :disabled="sessionStatus === 'closed'" :placeholder="sessionStatus === 'closed' ? '本次会话已结束，请新建会话继续咨询' : '输入你的问题...'" @keydown="handleUserKeydown"></textarea>
-                    <button class="send-btn" :disabled="sessionStatus === 'closed' || isLoading || !userInput.trim()" @click="sendUserMessage">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </footer>
-            </section>
-
-            <section v-else-if="isAdmin && activeView === 'workspace'" class="workspace-view">
-                <header class="topbar">
-                    <div>
-                        <p class="eyebrow">Agent Workspace</p>
-                        <h2>客服工作台</h2>
-                    </div>
-                    <button class="secondary-btn" @click="loadAdminConversations">
-                        <i class="fas fa-rotate"></i><span>刷新</span>
-                    </button>
-                </header>
-
-                <div class="workspace-grid">
-                    <aside class="queue-panel">
-                        <div class="filters">
-                            <button v-for="item in adminFilters" :key="item.value" :class="{active: adminStatusFilter === item.value}" @click="adminStatusFilter = item.value; loadAdminConversations()">
-                                <span>{{ item.label }}</span>
-                                <em v-if="item.badge === 'handoff_requested' && adminHandoffRequestCount">{{ adminHandoffRequestCount }}</em>
-                            </button>
-                        </div>
-                        <div class="queue-list">
-                            <button v-for="item in adminConversations" :key="item.username + item.session_id" :class="['queue-item', {active: selectedConversation && selectedConversation.session_id === item.session_id && selectedConversation.username === item.username}]" @click="openConversation(item)">
-                                <strong>{{ item.username }}</strong>
-                                <span>{{ statusText(item.status) }}</span>
-                                <small>{{ item.last_message_preview || '暂无消息' }}</small>
-                                <em v-if="item.unread_user_count">{{ item.unread_user_count }}</em>
-                            </button>
-                        </div>
-                    </aside>
-
-                    <section class="agent-chat">
-                        <div v-if="!selectedConversation" class="empty-state">
-                            <h3>选择一个会话</h3>
-                            <p>全部、AI处理中、请求人工服务、人工处理中和已完成会话会显示在左侧。</p>
-                        </div>
-                        <template v-else>
-                            <div class="conversation-head">
-                                <div>
-                                    <strong>{{ selectedConversation.username }}</strong>
-                                    <span>{{ selectedConversation.session_id }}</span>
                                 </div>
-                                <div class="action-row">
-                                    <button v-if="['ai_active', 'handoff_requested'].includes(selectedConversation.status)" class="agent-action-btn takeover-btn" @click="takeoverConversation">
-                                        {{ selectedConversation.status === 'ai_active' ? '接管' : '接入' }}
-                                    </button>
-                                    <button v-if="selectedConversation.status !== 'closed'" class="agent-action-btn close-btn" @click="closeConversation">关闭</button>
-                                    <button class="agent-action-btn delete-btn" @click="deleteConversation">
-                                        <i class="fas fa-trash"></i><span>删除记录</span>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="messages agent-messages" ref="adminMessagesContainer">
-                                <div v-for="message in adminMessages" :key="message.id || message.localId" :class="['message-row', message.sender_type, {streaming: message.streaming}]">
-                                    <div class="bubble">
-                                        <div class="message-name">{{ senderName(message, 'admin') }}</div>
-                                        <div v-if="message.sender_type === 'ai' && message.content" v-html="parseMarkdown(message.content)"></div>
-                                        <div v-else-if="message.sender_type !== 'ai'">{{ message.content }}</div>
-                                        <div v-if="message.sender_type === 'ai' && hasLiveActivity(message)" class="ai-activity">
-                                            <div class="ai-activity-head">
-                                                <span class="typing-dots"><i></i><i></i><i></i></span>
-                                                <strong>{{ currentAiAction(message) }}</strong>
-                                            </div>
-                                            <div v-if="activitySteps(message).length" class="ai-activity-steps">
-                                                <div v-for="(step, index) in activitySteps(message)" :key="index" class="ai-activity-step">
-                                                    <span>{{ step.icon || '•' }}</span>
-                                                    <div>
-                                                        <strong>{{ step.label || '正在处理' }}</strong>
-                                                        <em v-if="step.detail">{{ step.detail }}</em>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div v-if="messageImages(message).length" class="message-images">
-                                            <figure v-for="(image, index) in messageImages(message)" :key="image.url + index" class="message-image-card">
-                                                <a :href="assetUrl(image.url)" target="_blank" rel="noopener">
-                                                    <img :src="assetUrl(image.url)" :alt="imageAlt(image)">
-                                                </a>
-                                                <figcaption>
-                                                    <strong>{{ image.caption || image.filename || 'PDF 图片' }}</strong>
-                                                    <span>{{ imageMeta(image) }}</span>
-                                                </figcaption>
-                                            </figure>
-                                        </div>
-                                        <details v-if="hasRagDetails(message)" class="rag-trace" :open="message.streaming">
-                                            <summary>
-                                                <span>检索全流程</span>
-                                                <em v-if="ragTraceStatus(message)">{{ ragTraceStatus(message) }}</em>
-                                            </summary>
-
-                                            <div v-if="message.rag_steps && message.rag_steps.length" class="rag-steps">
-                                                <div v-for="(step, index) in message.rag_steps" :key="index" class="rag-step">
-                                                    <span>{{ step.icon || '•' }}</span>
-                                                    <strong>{{ step.label }}</strong>
-                                                    <em v-if="step.detail">{{ step.detail }}</em>
-                                                </div>
-                                            </div>
-
-                                            <template v-if="message.rag_trace">
-                                                <div class="trace-pills">
-                                                    <span v-if="message.rag_trace.retrieval_stage">阶段：{{ message.rag_trace.retrieval_stage }}</span>
-                                                    <span v-if="message.rag_trace.retrieval_mode">模式：{{ message.rag_trace.retrieval_mode }}</span>
-                                                    <span v-if="message.rag_trace.candidate_k">候选：{{ message.rag_trace.candidate_k }}</span>
-                                                    <span>Rerank：{{ formatBool(message.rag_trace.rerank_applied) }}</span>
-                                                    <span>Auto-merge：{{ formatBool(message.rag_trace.auto_merge_applied) }}</span>
-                                                </div>
-                                                <div class="trace-fields">
-                                                    <div v-if="message.rag_trace.query">
-                                                        <strong>原始查询</strong>
-                                                        <p>{{ message.rag_trace.query }}</p>
-                                                    </div>
-                                                    <div v-if="message.rag_trace.expanded_query && message.rag_trace.expanded_query !== message.rag_trace.query">
-                                                        <strong>扩展查询</strong>
-                                                        <p>{{ message.rag_trace.expanded_query }}</p>
-                                                    </div>
-                                                    <div v-if="message.rag_trace.step_back_question">
-                                                        <strong>退步问题</strong>
-                                                        <p>{{ message.rag_trace.step_back_question }}</p>
-                                                    </div>
-                                                    <div v-if="message.rag_trace.step_back_answer">
-                                                        <strong>退步答案</strong>
-                                                        <p>{{ message.rag_trace.step_back_answer }}</p>
-                                                    </div>
-                                                    <div v-if="message.rag_trace.hypothetical_doc">
-                                                        <strong>HyDE 文档</strong>
-                                                        <p>{{ chunkPreview(message.rag_trace.hypothetical_doc) }}</p>
-                                                    </div>
-                                                </div>
-                                                <div class="trace-chunks">
-                                                    <strong>召回片段</strong>
-                                                    <div v-if="traceChunks(message.rag_trace).length === 0" class="muted-text">本轮没有知识库召回片段</div>
-                                                    <div v-for="(chunk, index) in traceChunks(message.rag_trace)" :key="index + (chunk.chunk_id || chunk.filename || '')" class="trace-chunk">
-                                                        <div>
-                                                            <strong>#{{ index + 1 }} {{ chunk.filename || 'Unknown' }}</strong>
-                                                            <span>Page {{ displayPage(chunk.page_number) }} · L{{ chunk.chunk_level || '-' }} · score {{ formatScore(chunk.rerank_score ?? chunk.keyword_score ?? chunk.score) }}</span>
-                                                        </div>
-                                                        <p>{{ chunkPreview(chunk.text) }}</p>
-                                                        <div v-if="visibleChunkImages(message, chunk).length" class="chunk-image-strip">
-                                                            <a v-for="(image, imageIndex) in visibleChunkImages(message, chunk)" :key="image.url + imageIndex" :href="assetUrl(image.url)" target="_blank" rel="noopener">
-                                                                <img :src="assetUrl(image.url)" :alt="imageAlt(image)">
-                                                            </a>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </template>
-                                        </details>
-                                    </div>
-                                </div>
-                            </div>
-                            <footer class="composer">
-                                <textarea v-model="adminReply" rows="1" placeholder="输入人工客服回复..." @keydown="handleAdminKeydown"></textarea>
-                                <button class="send-btn" :disabled="!canReply" @click="sendAdminReply">
-                                    <i class="fas fa-paper-plane"></i>
-                                </button>
-                            </footer>
-                        </template>
+                            </details>
+                        </div>
                     </section>
-                </div>
-            </section>
-
-            <section v-else-if="isAdmin && activeView === 'users'" class="plain-view">
-                <header class="topbar">
-                    <div>
-                        <p class="eyebrow">Users</p>
-                        <h2>用户管理</h2>
-                    </div>
-                    <div class="topbar-actions">
-                        <input class="search-input" v-model="userKeyword" type="text" placeholder="搜索用户名或角色" @keydown.enter="loadUsers">
-                        <button class="secondary-btn" @click="loadUsers">
-                            <i class="fas fa-magnifying-glass"></i><span>查找</span>
-                        </button>
-                        <button class="secondary-btn" @click="clearUserSearch">
-                            <i class="fas fa-rotate"></i><span>重置</span>
-                        </button>
-                    </div>
-                </header>
-                <div class="users-grid">
-                    <form class="panel user-form-panel" @submit.prevent="saveUser">
-                        <h3>{{ editingUserId ? '编辑用户' : '新增用户' }}</h3>
-                        <input v-model="userForm.username" type="text" placeholder="用户名">
-                        <input v-model="userForm.password" type="password" :placeholder="editingUserId ? '新密码（留空不修改）' : '密码'">
-                        <select v-model="userForm.role">
-                            <option value="user">普通用户</option>
-                            <option value="admin">管理员</option>
-                        </select>
-                        <div class="action-row">
-                            <button class="primary-btn" type="submit" :disabled="userSaving">
-                                <i class="fas fa-floppy-disk"></i><span>{{ userSaving ? '保存中...' : '保存用户' }}</span>
-                            </button>
-                            <button v-if="editingUserId" class="secondary-btn" type="button" @click="resetUserForm">
-                                <i class="fas fa-xmark"></i><span>取消编辑</span>
-                            </button>
-                        </div>
-                    </form>
-
-                    <div class="table-card users-table">
-                        <div class="table-row user-row user-row-head">
-                            <strong>用户名</strong>
-                            <span>角色</span>
-                            <span>会话数</span>
-                            <span>创建时间</span>
-                            <span>操作</span>
-                        </div>
-                        <div v-if="users.length === 0" class="history-empty">暂无用户</div>
-                        <div v-for="user in users" :key="user.id" class="table-row user-row">
-                            <strong>{{ user.username }}</strong>
-                            <span>{{ user.role === 'admin' ? '管理员' : '普通用户' }}</span>
-                            <span>{{ user.session_count }} 个会话</span>
-                            <time>{{ new Date(user.created_at).toLocaleString() }}</time>
-                            <div class="table-actions">
-                                <button class="icon-btn" type="button" title="编辑用户" @click="editUser(user)">
-                                    <i class="fas fa-pen"></i>
-                                </button>
-                                <button class="icon-btn danger" type="button" title="删除用户" @click="deleteUser(user)">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section v-else-if="isAdmin && activeView === 'products'" class="plain-view">
-                <header class="topbar">
-                    <div>
-                        <p class="eyebrow">Products</p>
-                        <h2>商品库管理</h2>
-                    </div>
-                    <div class="topbar-actions">
-                        <input class="search-input" v-model="productKeyword" type="text" placeholder="搜索商品名、类别、材质" @keydown.enter="loadProducts">
-                        <button class="secondary-btn" @click="loadProducts">
-                            <i class="fas fa-magnifying-glass"></i><span>查找</span>
-                        </button>
-                        <button class="secondary-btn" @click="clearProductSearch">
-                            <i class="fas fa-rotate"></i><span>重置</span>
-                        </button>
-                    </div>
-                </header>
-                <div class="products-grid">
-                    <form class="panel product-form-panel" @submit.prevent="saveProduct">
-                        <div class="product-form-head">
-                            <h3>{{ editingProductId ? '编辑商品' : '新增商品' }}</h3>
-                            <div class="action-row">
-                                <button v-if="editingProductId" class="secondary-btn" type="button" @click="resetProductForm">
-                                    <i class="fas fa-arrow-left"></i><span>返回</span>
-                                </button>
-                                <button class="primary-btn" type="submit" :disabled="productSaving">
-                                    <i class="fas fa-floppy-disk"></i><span>{{ productSaving ? '保存中...' : '保存商品' }}</span>
-                                </button>
-                            </div>
-                        </div>
-                        <input v-model="productForm.name" type="text" placeholder="商品名">
-                        <input v-model="productForm.category" type="text" placeholder="类别">
-                        <div class="form-two">
-                            <input v-model="productForm.price" type="text" placeholder="价格，例如 299 元">
-                            <input v-model.number="productForm.stock" type="number" min="0" step="1" placeholder="库存">
-                        </div>
-                        <input v-model="productForm.material" type="text" placeholder="材质">
-                        <textarea v-model="productForm.specifications" rows="4" placeholder="规格，例如尺寸、颜色、重量、型号等"></textarea>
-                        <input ref="productImageInput" type="file" accept=".jpg,.jpeg,.png,.webp,.gif" @change="handleProductImageSelect">
-                        <figure v-if="productForm.image_url" class="product-current-image">
-                            <img :src="assetUrl(productForm.image_url)" :alt="productForm.name || '商品图'">
-                            <figcaption>当前商品图</figcaption>
-                        </figure>
-                        <p v-if="productNotice" class="notice">{{ productNotice }}</p>
-                    </form>
-
-                    <div class="product-list-panel">
-                        <div v-if="products.length === 0" class="history-empty">暂无商品</div>
-                        <article v-for="product in products" :key="product.id" class="product-card">
-                            <div class="product-thumb">
-                                <img v-if="product.image_url" :src="assetUrl(product.image_url)" :alt="product.name">
-                                <i v-else class="fas fa-image"></i>
-                            </div>
-                            <div class="product-main">
-                                <div class="product-title-row">
-                                    <div>
-                                        <strong>{{ product.name }}</strong>
-                                        <span>{{ product.category || '未分类' }}</span>
-                                    </div>
-                                    <div class="table-actions">
-                                        <button class="icon-btn" type="button" title="编辑商品" @click="editProduct(product)">
-                                            <i class="fas fa-pen"></i>
-                                        </button>
-                                        <button class="icon-btn danger" type="button" title="删除商品" @click="deleteProduct(product)">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="product-meta-grid">
-                                    <div><span>价格</span><strong>{{ product.price || '-' }}</strong></div>
-                                    <div><span>库存</span><strong>{{ product.stock }}</strong></div>
-                                    <div><span>材质</span><strong>{{ product.material || '-' }}</strong></div>
-                                </div>
-                                <p>{{ product.specifications || '未填写规格' }}</p>
-                            </div>
-                        </article>
-                    </div>
-                </div>
-            </section>
-
-            <section v-else-if="isAdmin && activeView === 'knowledge'" class="plain-view">
-                <header class="topbar">
-                    <div>
-                        <p class="eyebrow">Knowledge Base</p>
-                        <h2>知识库管理</h2>
-                    </div>
-                    <button class="secondary-btn" @click="refreshKnowledge">
-                        <i class="fas fa-rotate"></i><span>刷新</span>
-                    </button>
-                </header>
-                <div class="knowledge-grid">
-                    <div class="panel">
-                        <h3>上传文档</h3>
-                        <p class="muted-text">支持 PDF、Word、Excel，上传后进入现有 RAG 知识库。</p>
-                        <input ref="fileInput" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" @change="handleFileSelect">
-                        <button class="primary-btn" :disabled="!selectedFile || isUploading" @click="uploadDocument">
-                            {{ isUploading ? '上传中...' : '上传到知识库' }}
-                        </button>
-                        <p v-if="uploadProgress" class="notice">{{ uploadProgress }}</p>
-                    </div>
-                    <div class="panel">
-                        <h3>文档列表</h3>
-                        <div v-if="documents.length === 0" class="muted-text">暂无文档</div>
-                        <div v-for="doc in documents" :key="doc.filename" class="doc-row">
-                            <div>
-                                <strong>{{ doc.filename }}</strong>
-                                <span>{{ doc.file_type }} · {{ doc.chunk_count }} 个片段</span>
-                            </div>
-                            <button class="icon-btn danger" @click="deleteDocument(doc.filename)">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="panel rag-flow-panel">
-                        <h3>索引与检索链路</h3>
-                        <div v-if="!ragPipeline" class="muted-text">正在加载链路状态...</div>
-                        <template v-else>
-                            <div class="pipeline-metrics">
-                                <div>
-                                    <span>集合</span>
-                                    <strong>{{ ragPipeline.settings.collection }}</strong>
-                                </div>
-                                <div>
-                                    <span>召回模式</span>
-                                    <strong>{{ ragPipeline.settings.sparse_method }} + Dense</strong>
-                                </div>
-                                <div>
-                                    <span>融合</span>
-                                    <strong>{{ ragPipeline.settings.fusion }}</strong>
-                                </div>
-                                <div>
-                                    <span>精排</span>
-                                    <strong>{{ formatBool(ragPipeline.settings.rerank_enabled) }}</strong>
-                                </div>
-                            </div>
-
-                            <div class="flow-columns">
-                                <div>
-                                    <h4>索引流程</h4>
-                                    <div v-for="step in ragPipeline.indexing_flow" :key="step.name" class="flow-item">
-                                        <strong>{{ step.name }}</strong>
-                                        <span>{{ step.detail }}</span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4>检索流程</h4>
-                                    <div v-for="step in ragPipeline.retrieval_flow" :key="step.name" class="flow-item">
-                                        <strong>{{ step.name }}</strong>
-                                        <span>{{ step.detail }}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="doc-stats">
-                                <h4>当前索引统计</h4>
-                                <div v-if="ragPipeline.document_stats.length === 0" class="muted-text">暂无索引片段</div>
-                                <div v-for="stat in ragPipeline.document_stats" :key="stat.filename" class="stat-row">
-                                    <strong>{{ stat.filename }}</strong>
-                                    <span>L1 {{ stat.level_1 || 0 }} · L2 {{ stat.level_2 || 0 }} · L3 {{ stat.level_3 || 0 }}</span>
-                                </div>
-                            </div>
-
-                            <div class="rag-diagnostic">
-                                <h4>检索测试</h4>
-                                <div class="diagnostic-input">
-                                    <input v-model="ragTestQuery" type="text" placeholder="输入要测试的问题" @keydown.enter="runRagDiagnostic">
-                                    <button class="secondary-btn" :disabled="ragTestLoading || !ragTestQuery.trim()" @click="runRagDiagnostic">
-                                        <i class="fas fa-magnifying-glass"></i><span>{{ ragTestLoading ? '检索中...' : '测试' }}</span>
-                                    </button>
-                                </div>
-                                <div v-if="ragTestResult" class="diagnostic-result">
-                                    <div class="result-meta">
-                                        <span>模式：{{ ragTestResult.meta.retrieval_mode || '-' }}</span>
-                                        <span>候选：{{ ragTestResult.meta.candidate_count ?? ragTestResult.chunks.length }}</span>
-                                        <span>Rerank：{{ formatBool(ragTestResult.meta.rerank_applied) }}</span>
-                                        <span>Auto-merge：{{ formatBool(ragTestResult.meta.auto_merge_applied) }}</span>
-                                    </div>
-                                    <p v-if="ragTestResult.meta.retrieval_error" class="warning-text">
-                                        {{ ragTestResult.meta.retrieval_error }}
-                                    </p>
-                                    <p v-if="ragTestResult.meta.rerank_error" class="warning-text">
-                                        Rerank：{{ ragTestResult.meta.rerank_error }}
-                                    </p>
-                                    <div v-if="ragTestResult.chunks.length === 0" class="muted-text">没有召回片段</div>
-                                    <div v-for="chunk in ragTestResult.chunks" :key="chunk.rank + chunk.chunk_id" class="chunk-row">
-                                        <div>
-                                            <strong>#{{ chunk.rank }} {{ chunk.filename }}</strong>
-                                            <span>Page {{ chunk.page_number }} · L{{ chunk.chunk_level }} · score {{ formatScore(chunk.rerank_score ?? chunk.keyword_score ?? chunk.score) }}</span>
-                                        </div>
-                                        <p>{{ chunkPreview(chunk.text) }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </section>
-        </main>
-    </div>
-
-    <script src="script.js"></script>
-</body>
-
+                </main>
+            </div>
+        </div>
+        <script src="script.js"></script>
+    </body>
 </html>

@@ -5,26 +5,32 @@
 项目实现了完整的用户端和管理员端：普通用户可以与 AI 流式聊天、查询知识库、转接人工客服；管理员可以管理知识库、商品、用户和客服会话。系统还集成了天气、物流、语音和图片理解等能力，适合用于学习 RAG、Agent、向量数据库和 AI 客服系统的完整开发流程。
 
 ## 项目效果
-登录界面
-![输入图片说明](image.png)
 
-管理员界面
-![输入图片说明](guanliyuan.png)
+以下截图来自当前版本前端连接本地真实后端后的浏览器验证，展示登录、客服工作台、用户聊天、商品库、知识库和检索诊断页面。
 
-用户界面
-![输入图片说明](yonghu.png)
+### 登录界面
 
-管理员功能
-![输入图片说明](gongneng1.png)
-![输入图片说明](gongneng2.png)
-![输入图片说明](gongneng3.png)
+![SuperService 登录界面](uploads/current-login.png)
 
-知识库检索
-![输入图片说明](zhishiku.png)
-![输入图片说明](%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2.png)
+### 管理员客服工作台
 
-商品库检索
-![输入图片说明](%E5%95%86%E5%93%81%E6%A3%80%E7%B4%A2.png)
+![SuperService 管理员客服工作台](uploads/current-admin-workspace.png)
+
+### 用户在线客服
+
+![SuperService 用户在线客服](uploads/current-user-chat.png)
+
+### 商品库
+
+![SuperService 商品库](uploads/current-products.png)
+
+### 知识库
+
+![SuperService 知识库](uploads/current-knowledge.png)
+
+### RAG 检索诊断
+
+![SuperService RAG 检索诊断](uploads/current-rag-diagnostics.png)
 
 ### 用户端
 
@@ -309,7 +315,13 @@ uv run --with pytest --with httpx python -m pytest -q
 uvx ruff check backend tests
 ```
 
-当前测试结果为 12 个测试通过。
+前端交互回归测试（需要 Node.js）：
+
+```powershell
+node --test tests/frontend_interactions.test.cjs
+```
+
+当前 Python 测试 12 项、前端交互测试 10 项通过。界面采用浅色中性风格，覆盖所有业务页面；设计约定、真实后端验证与未验证范围见 [UI 设计与验证](docs/ui-design.md)。
 
 ## 常见问题
 
